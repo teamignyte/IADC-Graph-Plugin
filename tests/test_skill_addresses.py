@@ -22,6 +22,14 @@ def test_setup_skill_directory_and_frontmatter_name():
     assert fields.get("name") == "setup"
 
 
+def test_setup_skill_is_not_model_invoked():
+    """`setup` writes a credential — it must only run when the user asks for it (`/iadc-graph:setup`
+    or an explicit hand-off from another skill), never because the model decided on its own that
+    setup looked relevant. `disable-model-invocation: true` is what enforces that."""
+    fields = read_frontmatter(SKILLS_DIR / "setup" / "SKILL.md")
+    assert fields.get("disable-model-invocation") == "true"
+
+
 def test_no_other_skill_directories_exist():
     """The plugin ships exactly two skills — an extra directory would be a silent third address."""
     names = sorted(p.name for p in SKILLS_DIR.iterdir() if p.is_dir())

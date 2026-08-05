@@ -1,8 +1,7 @@
 """skills/iadc-graph/ is a wholesale mirror of IADC-Core's canonical skill and carries zero local
-patches (IADC-Core's docs/marketplace-mirror-refresh.md). This repo can't reach across to
-IADC-Core to diff content in CI, but it can guard the mirror's own file-set shape: an unexpected
-extra or missing file here is exactly what would make the upstream `diff -r` byte-identity check
-fail at the next refresh.
+patches. This repo can't reach across to IADC-Core to diff content in CI, but it can guard the
+mirror's own file-set shape: an unexpected extra or missing file here is exactly what would make a
+byte-identity check against the upstream skill fail at the next refresh.
 """
 
 from conftest import SKILLS_DIR
