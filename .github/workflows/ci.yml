@@ -4,11 +4,22 @@ on:
   push:
   pull_request:
 
+# Least privilege. This job only reads the repo and runs pytest, so it declares a read-only
+# contents scope and drops the checkout credential rather than inheriting whatever the
+# repository's default GITHUB_TOKEN scope happens to be — a setting that can change without a
+# commit. All three CI workflows in the family (this one, IADC-Advisor's, IADC-Tester's) carry
+# both lines. None of them is a "reference" the others are synced to: removing either line here
+# would not license removing it there.
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

@@ -12,7 +12,7 @@ dependency, so it arrives automatically with either.
 
 | | |
 |---|---|
-| `skills/iadc-graph/` | The skill that reads the graph: session lifecycle, node-id forms, the relation vocabulary, return shapes. A byte-identical mirror of `IADC-Core`'s canonical copy. |
+| `skills/iadc-graph/` | The skill that reads the graph: session lifecycle, node-id forms, the relation vocabulary, return shapes. Mirrored wholesale from its canonical source upstream and never hand-edited here — a fix belongs upstream. |
 | `skills/setup/` | Writes the `iadc` MCP entry (graph URL + API key) into a client repo's `.mcp.json`, with the git-safety sequence a credential write needs. |
 
 Invoked as `iadc-graph:iadc-graph` and `iadc-graph:setup` — see `CLAUDE.md` for why those addresses
