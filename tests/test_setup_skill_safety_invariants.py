@@ -16,24 +16,44 @@ just wholesale removal.
 
 from conftest import setup_skill_text  # noqa: F401 (fixture import for clarity)
 
-# Every place in steps 1-4 where the user can decline, paired with its own consequence in one
-# literal anchor spanning both — not a generic word-distance heuristic. A first attempt at this
-# test used "search N chars after the word 'decline' for a consequence phrase"; it missed the
-# exact mutation it was built for (inverting "Write **no** credential" to "Write the credential
-# anyway" while leaving an unrelated nearby "leave the placeholder" phrase intact, which the
-# distance-based version accepted as a paired consequence). Anchoring the decision and its
-# consequence together in one string, one per real branch, closes that gap: inverting any single
-# branch's consequence breaks only that branch's anchor, and the anchor can't be satisfied by a
-# consequence phrase belonging to a *different* branch. Verified against skills/setup/SKILL.md by
-# hand; each tuple is (branch label, exact literal span, present exactly once in the real file).
+# Thirteen places across steps 1-4 where the flow stops without writing — either the user declined
+# an offered git action, or the skill itself halted on a state it won't write through. Each entry
+# pairs that branch's own decision with its own consequence in one literal span, so inverting a
+# single branch's outcome (e.g. "write no credential" -> "write the credential anyway") breaks only
+# that branch's anchor — a plain word or phrase count can be satisfied by a consequence that
+# actually belongs to a *different* branch, which this avoids. Two of step 1's four branches
+# (labelled S1c, S1d below) end in byte-identical consequence text; each anchor there also carries
+# enough of its own preceding sentence to stay unique. Every phrase below is verified present
+# exactly once in the current file.
 _DECLINE_CONSEQUENCE_ANCHORS = [
     (
-        "step 1 — untracked-but-unconfirmed entry, user re-enters values",
+        "step 1, S1a — ambiguous existing entry, user chooses to leave it standing",
+        'restarting? On "leave it," stop without writing anything.',
+    ),
+    (
+        "step 1, S1b — untracked existing entry, check-ignore finds no rule at all",
+        "added to `.gitignore` and committed. **Report this and stop — don't add the line yourself "
+        "and don't ask whether to.**",
+    ),
+    (
+        "step 1, S1c — untracked existing entry, ignore rule present but not durable",
+        "Say the entry works, and that it needs a committed, non-negated `.gitignore` rule, "
+        "actually compared against the working tree, before it's durable. **Report this and stop, "
+        "same as above** — no commit, no asking.",
+    ),
+    (
+        "step 1, S1d — untracked existing entry, HEAD still carries a committed blob",
+        "the removal from the index is already staged — it only needs one more commit to become "
+        "durable, the same commit step 4's own third gate also requires. **Report this and stop, "
+        "same as above** — no commit, no asking.",
+    ),
+    (
+        "step 2 — declines adding the .gitignore rule",
         "**On decline, add nothing, and don't ask again this run** — remember it: step 4 writes "
         "no credential value below.",
     ),
     (
-        "step 2 — declines committing the .gitignore rule",
+        "step 2 — declines clearing a skip-worktree/assume-unchanged .gitignore",
         "- **Decline** — write no credential this run either, for the same not-yet-durable reason.",
     ),
     (
@@ -41,11 +61,12 @@ _DECLINE_CONSEQUENCE_ANCHORS = [
         "- **Decline** → this step ends here. Write **no** credential — leave any `<placeholder>` exactly",
     ),
     (
-        "step 3 — staged-only .mcp.json, declines bundling the commit",
+        "step 3 — tracked-and-committed .mcp.json, accepted rm --cached but declines bundling the "
+        "removal commit with other staged work",
         "or decline bundling unrelated staged work** → write **no** credential this run.",
     ),
     (
-        "step 3 — declines untracking a staged-only .mcp.json outright",
+        "step 3 — staged-only (never committed) .mcp.json, declines git rm --cached",
         "same as the decline branch above: no credential, placeholders left alone, name what's "
         "needed, stop.",
     ),
@@ -54,23 +75,35 @@ _DECLINE_CONSEQUENCE_ANCHORS = [
         "On a second decline: stop, write no credential, say what's still needed.",
     ),
     (
-        "step 4 — gate 1 (basic check-ignore) fails",
+        "step 4, gate 1 — basic check-ignore fails",
         "Catches a step-2 decline on a repo where step 3 found no tracked file to react to (so "
         "nothing upstream already stopped this run). If it fails, write no credential and point "
         "back at the missing rule.",
     ),
     (
-        "step 4 — declines fixing the durability gate a second time",
+        "step 4, gate 2 — the four-part durability check fails and the offered fix is declined",
         "and if that's declined too, stop for this run.",
+    ),
+    (
+        "step 4, gate 3 — HEAD still carries .mcp.json despite step 3",
+        "`git cat-file -e HEAD:.mcp.json` **fails.** This is the one it's tempting to skip, "
+        "because step 3 usually already ensures it",
     ),
 ]
 
 
 def test_every_decline_branch_pairs_with_a_no_write_consequence(setup_skill_text):
-    """Turns red if any branch where the user declines stops saying nothing gets written, or if
-    that branch's own wording is altered at all — each anchor spans the decision and its
-    consequence together, so inverting one (e.g. "write no credential" -> "write the credential
-    anyway") breaks only its own anchor, not the others."""
+    """Turns red if any of these 13 named branches stops saying nothing gets written, or if that
+    branch's own wording is altered at all — each anchor spans the decision and its consequence
+    together, so inverting one breaks only its own anchor, not the others.
+
+    This is not every stop/decline-shaped sentence in the file. Two are deliberately not anchored
+    here: step 2's second "they'd rather commit the .gitignore line themselves" offer, whose
+    consequence text is close enough to the step-2 branch already anchored above (both read
+    "write no credential ... for the same not-yet-durable reason") that a third near-duplicate
+    anchor would add little; and step 4's separate malformed-.mcp.json triage stop, a real gap this
+    round does not close. Neither omission should be read as "covered" — check the branch directly
+    against skills/setup/SKILL.md rather than assuming this list is exhaustive."""
     missing = [
         label for label, phrase in _DECLINE_CONSEQUENCE_ANCHORS if setup_skill_text.count(phrase) != 1
     ]
