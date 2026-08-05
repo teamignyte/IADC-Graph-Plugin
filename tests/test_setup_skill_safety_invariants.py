@@ -87,8 +87,8 @@ _DECLINE_CONSEQUENCE_ANCHORS = [
     ),
     (
         "step 4, gate 3 — HEAD still carries .mcp.json despite step 3",
-        "`git cat-file -e HEAD:.mcp.json` **fails.** This is the one it's tempting to skip, "
-        "because step 3 usually already ensures it",
+        "straight through here, while HEAD still carries the file. If this gate fails, don't "
+        "write — say so, show `git status`, and offer to commit the removal now",
     ),
 ]
 
