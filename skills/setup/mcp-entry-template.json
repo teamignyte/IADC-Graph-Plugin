@@ -1,0 +1,11 @@
+{
+  "_comment": "TEMPLATE — /iadc-graph:setup asset. Describes the \"iadc\" block this skill merges into the client repo's .mcp.json, under mcpServers.iadc — never as a standalone file. Every _comment key here is a note to the skill and is dropped from what actually gets written; the real file gets LITERAL values, not ${VAR} (the Windows Desktop app does not reliably expand ${VAR} in .mcp.json).",
+  "iadc": {
+    "_comment": "The graph MCP is served by the standalone Graph service, over cleartext http, on a different port than any review API — the api-key here is the Graph service's own key, not any other service's. The scheme becomes https once the endpoint is TLS-terminated; until then http is correct and https fails the handshake.",
+    "type": "http",
+    "url": "http://<your-graph-host>:8001/mcp/",
+    "headers": {
+      "appian-api-key": "<your-iadc-graph-api-key>"
+    }
+  }
+}

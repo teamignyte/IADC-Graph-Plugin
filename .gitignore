@@ -1,0 +1,9 @@
+# Git worktrees for concurrent work live under the repo so the family CLAUDE.md
+# still loads inside them (see the umbrella's "Working across repos"). They are
+# never tracked — each is a checkout of this same repo.
+.worktrees/
+
+# Python test tooling
+__pycache__/
+*.pyc
+.pytest_cache/
