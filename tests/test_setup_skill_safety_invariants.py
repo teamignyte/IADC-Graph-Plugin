@@ -4,10 +4,11 @@ skills/setup/ writes a graph API key into a client repo's .mcp.json, gated behin
 checks (is `.mcp.json` really ignored, is it tracked, is the ignore rule actually durable) before
 anything is written. These tests can't execute the skill directly — it's instructions for Claude,
 not a program — so they check the prose itself: that each required gate's literal command is still
-present at its documented count, and that every branch where the user declines is still paired with
-a "write nothing" consequence nearby, rather than merely checking that some safety-flavored words
-appear somewhere in the file. A test that only checks "the phrase exists" can't tell a real gate
-from a lone reference to one, and can't tell "don't write" from its own negation.
+present at its documented count, and that 13 of the file's 16 no-write halts are each still paired
+with their own "write nothing" consequence in one literal span — the remaining three are named, not
+anchored, below — rather than merely checking that some safety-flavored words appear somewhere in
+the file. A test that only checks "the phrase exists" can't tell a real gate from a lone reference
+to one, and can't tell "don't write" from its own negation.
 
 Every count below was read directly off the current file and is asserted as an exact equality
 (not merely "at least one"), so a single deleted or altered occurrence turns the test red — not
@@ -93,17 +94,19 @@ _DECLINE_CONSEQUENCE_ANCHORS = [
 
 
 def test_every_decline_branch_pairs_with_a_no_write_consequence(setup_skill_text):
-    """Turns red if any of these 13 named branches stops saying nothing gets written, or if that
-    branch's own wording is altered at all — each anchor spans the decision and its consequence
-    together, so inverting one breaks only its own anchor, not the others.
+    """Turns red if any of these 13 named branches stops saying nothing gets written within its
+    anchored span — each anchor spans the decision and its consequence together, so inverting one
+    breaks only its own anchor, not the others.
 
-    This is not every stop/decline-shaped sentence in the file. Two are deliberately not anchored
+    This is not every stop/decline-shaped sentence in the file. Three are deliberately not anchored
     here: step 2's second "they'd rather commit the .gitignore line themselves" offer, whose
     consequence text is close enough to the step-2 branch already anchored above (both read
     "write no credential ... for the same not-yet-durable reason") that a third near-duplicate
-    anchor would add little; and step 4's separate malformed-.mcp.json triage stop, a real gap this
-    round does not close. Neither omission should be read as "covered" — check the branch directly
-    against skills/setup/SKILL.md rather than assuming this list is exhaustive."""
+    anchor would add little; step 4's separate malformed-.mcp.json triage stop, a gap this test does
+    not close; and the halt for when this repo has no `.git` yet, right after step 2's durability
+    check, which stops before any of the checks below it can even run. None of the three should be
+    read as "covered" — check the branch directly against skills/setup/SKILL.md rather than assuming
+    this list is exhaustive."""
     missing = [
         label for label, phrase in _DECLINE_CONSEQUENCE_ANCHORS if setup_skill_text.count(phrase) != 1
     ]
