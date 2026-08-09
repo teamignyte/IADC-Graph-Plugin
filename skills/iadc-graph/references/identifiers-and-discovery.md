@@ -47,7 +47,7 @@ the label string but the label as a whole is not the id — or `"⊘ {name}
 **The rule that matters in practice: always pass `id` exactly as returned by
 another tool call — never one you typed, guessed, or extracted from a label
 string.** This mirrors the Appian skill's UUID discipline
-(`.claude/skills/appian/references/tools-mcp.md`, "Critical Rule: Never
+(umbrella `.claude/skills/appian/references/tools-mcp.md`, "Critical Rule: Never
 Fabricate UUIDs") — same failure mode (silent 404-style `"node not found"`),
 same fix (retrieve, don't guess).
 
@@ -83,13 +83,17 @@ query/filters rather than assuming it doesn't exist.
 If nothing matches, the object may not be part of this session's package —
 move to step 2.
 
-### 2. The Appian-MCP name→UUID handoff (object not yet in the seeded graph)
+### 2. The Appian-MCP name→UUID handoff (object not yet in the seeded graph, only where that server is configured)
 
-When you have a human-given name for an Appian design object that isn't
-(yet) in this session's graph — or you're not sure it is, and want to
-resolve the name authoritatively before searching — resolve it via the
-`appian` MCP first, exactly the way the `appian` skill requires for its own
-tool calls (`.claude/skills/appian/references/tools-mcp.md`, "UUID Sources"
+**Only if the `appian` MCP is configured in this session** — not every
+install has it; a Tester-only install carries no Appian credentials and
+never configures this server, so this whole step is unavailable there and
+step 1 above (or step 3 below) is as far as such a session can go. Where it
+is configured: when you have a human-given name for an Appian design object
+that isn't (yet) in this session's graph — or you're not sure it is, and
+want to resolve the name authoritatively before searching — resolve it via
+the `appian` MCP, exactly the way the `appian` skill requires for its own
+tool calls (umbrella `.claude/skills/appian/references/tools-mcp.md`, "UUID Sources"
 / "Never Fabricate UUIDs"):
 
 - `listRecordTypes` / `getRecordType` — record types
@@ -111,11 +115,11 @@ all, as a boundary node under a different id per the priority rules above,
 or not be reachable at all).
 
 **Never fabricate a UUID.** If you don't have one from a tool response —
-either the graph's own `find_nodes`/`list_nodes`, or the Appian MCP's
-`list*`/`get*` tools — stop and retrieve it. Guessing a UUID format, reusing
-one from a different session/environment, or inventing a placeholder produces
-a silent `"node not found"` at best and a wrong-node mixup at worst if you
-guess a real id in the wrong graph.
+either the graph's own `find_nodes`/`list_nodes`, or — where the `appian`
+MCP is configured — its `list*`/`get*` tools — stop and retrieve it.
+Guessing a UUID format, reusing one from a different session/environment, or
+inventing a placeholder produces a silent `"node not found"` at best and a
+wrong-node mixup at worst if you guess a real id in the wrong graph.
 
 ### 3. `edges_by_relation` as a no-arg-needed enumeration fallback
 

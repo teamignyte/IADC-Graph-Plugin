@@ -1,6 +1,6 @@
 ---
 name: "iadc-graph"
-description: "MANDATORY skill for the IADC graph MCP (`iadc` server, tools surfaced as `mcp__iadc__*`, 18 tools). Provides the session lifecycle (seed -> seed_status -> read tools -> close, 30-min TTL), the node-id forms read tools require (never a display name — get a starting node_id from find_nodes/list_nodes, or resolve an Appian object name to its UUID via the Appian MCP first), the 24-relation vocabulary (exact-match string, unknown relation -> [] not an error), the 10 node kinds/object_types, and the return-shape/error conventions the tool schemas can't express (compact enriched records, node_label as the wire key not `name`, occurrences only via get_edge, session-error dict shapes). Load BEFORE calling any `iadc` MCP tool. Covers: seed, seed_status, close, report_changes, get_neighbors, get_node, callers_of, shortest_path, get_out_edges, get_in_edges, get_edge, edges_by_relation, list_nodes, find_nodes, graph_overview, reachable, record_model, get_sail. Verbs: seed, traverse, find, list, path, callers, neighbors, reachable, blast radius, record model, get sail, close session."
+description: "MANDATORY skill for the IADC graph MCP (`iadc` server, tools surfaced as `mcp__iadc__*`, 18 tools). Provides the session lifecycle (seed -> seed_status -> read tools -> close, 30-min TTL), the node-id forms read tools require (never a display name — get a starting node_id from find_nodes/list_nodes), the 24-relation vocabulary (exact-match string, unknown relation -> [] not an error), the 10 node kinds/object_types, and the return-shape/error conventions the tool schemas can't express (compact enriched records, node_label as the wire key not `name`, occurrences only via get_edge, session-error dict shapes). Load BEFORE calling any `iadc` MCP tool. Covers: seed, seed_status, close, report_changes, get_neighbors, get_node, callers_of, shortest_path, get_out_edges, get_in_edges, get_edge, edges_by_relation, list_nodes, find_nodes, graph_overview, reachable, record_model, get_sail. Verbs: seed, traverse, find, list, path, callers, neighbors, reachable, blast radius, record model, get sail, close session."
 ---
 
 ## Why this matters
@@ -138,9 +138,10 @@ from finding the application to seed.)
 - **`[]` vs `{"error": ...}` are both real, distinct outcomes** — don't treat
   an empty list as failure. See `references/return-shapes-and-errors.md` for
   which tools distinguish "exists but empty" from "not found."
-- **A session belongs to the principal that created it.** Reusing another
-  agent's/user's `session_id` fails with a distinct
-  `"session does not belong to this caller"` error, not "unknown session."
+- **A session is no longer scoped to the principal that created it (retired
+  IV-342, 2026-08-05).** `session_id` alone is the capability — reusing
+  another agent's/user's `session_id` now just works, the same as your own.
+  See `references/session-lifecycle.md`'s "Principal binding" section.
 - **`get_sail`'s `sail: []` isn't always an error condition.** A real artifact
   with genuinely no SAIL (e.g. a constant) returns `sail: []` with no
   `reason` key; a kind that structurally never carries SAIL (`appian_builtin`,

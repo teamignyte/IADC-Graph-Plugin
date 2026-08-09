@@ -104,6 +104,23 @@ one of the four failure states (`message` carries the reason — no graph
 will ever attach; re-`seed` if you want to retry). There's no push/webhook —
 poll on your own cadence.
 
+**A ready `application_uuid`/`ready_with_warnings` seed also, separately and
+best-effort, persists a durable Graph Snapshot** (visible via the Graph
+service's `GET /snapshots` and the Portal, not through this MCP surface) —
+but that persistence starts *after* the session reaches one of those two
+states, not atomically with it, and can take as long as the render itself
+(~90s for a 16.3k-node application). If you (or whatever you're driving on
+behalf of) care about the Snapshot showing up in that list — not just about
+reading the session's graph via `session_id`, which *is* immediately
+available once the session is ready — don't treat readiness as proof the
+Snapshot already exists. **You have no way to check from inside this MCP
+session** (round-2 fix wave, F9): the `iadc` server's tool roster has no
+snapshot-listing tool, so `GET /snapshots` is reachable only to a human,
+directly or via the Portal — not to whatever is driving this `seed` call.
+If you need to know when the Snapshot lands, that's a question for a human
+with Portal/HTTP access, not something to poll for yourself; otherwise just
+keep in mind it's eventual, not instant.
+
 An `export_ref` session's `seed_status` will just immediately confirm
 `"ready"` — harmless to call, never necessary.
 
@@ -124,17 +141,24 @@ Practical implication: don't seed once at the start of a long task and sit
 on the session_id for a long time before your first read — if more than 30
 idle minutes pass, re-seed.
 
-## Principal binding
+## Principal binding — retired (IV-342, 2026-08-05)
 
-A session is bound to the principal that created it (whoever/whatever
-called `seed`). Every later call presenting that `session_id` must come
-from the same principal, or it's rejected with a *different* error than an
-unknown id: `{"error": "session does not belong to this caller",
-"session_id": ...}` vs `{"error": "unknown or expired session",
-"session_id": ...}`. You cannot hand a `session_id` to another agent/caller
-and have them read it — each caller needs its own `seed`. (Under stdio
-there's effectively one fixed local principal, so this only bites under the
-Graph service's HTTP transport with distinct authenticated callers.)
+A session used to be bound to the principal that created it (whoever/whatever
+called `seed`): a later call presenting that `session_id` from a *different*
+principal was rejected with `{"error": "session does not belong to this
+caller", "session_id": ...}`, distinct from `{"error": "unknown or expired
+session", "session_id": ...}`. **That check is gone** — product-owner
+decision (2026-08-05): the Portal is a developer/admin surface, so
+`session_id` alone is now the capability. Any caller that can reach the
+Graph service at all (still gated by the one shared `GRAPH_API_KEY`/Basic
+credential, `require_graph_auth`) may read any known `session_id`, including
+one seeded by a different principal — you CAN hand a `session_id` to another
+agent/caller and have them read AND close it. `principal` is still recorded
+on the session at seed time for audit, and stdio still seeds under the
+fixed `local-stdio` sentinel — neither of those changed, only the ownership
+checks did (both the read-time one on every tool, and `close`'s own — see
+below). See ADR 0030's 2026-08-05 correction to its own "Session security"
+clause for the full reasoning.
 
 ## Closing a session
 
@@ -144,18 +168,22 @@ close(session_id) -> {"closed": true|false}
 
 Frees the session's graph/context early — call it when you're done with a
 session rather than waiting out the TTL, especially for large graphs.
-`closed: false` covers both "never existed / already closed / expired" and
-"belongs to a different principal" — it deliberately doesn't distinguish
-those (closing never confirms or denies the existence of a session you
-don't own).
+`closed: false` means the `session_id` was never known, or was already
+closed/expired. Before IV-342, `close` also collapsed a second case in
+here — a session that existed but belonged to a different principal — since
+it alone kept an ownership check after the read tools' was dropped. That
+asymmetry is retired too: `close` now removes any known `session_id`
+regardless of who seeded it, same as a read.
 
 **`close` on a session still in an in-progress phase (`"queued"`/
 `"exporting"`/`"downloading"`/`"building"`) cancels the in-flight
-`application_uuid` build.** There's no separate "cancel seed" tool — if you
+`application_uuid` build call, and the `session_id` behaves as closed right
+away in every phase.** There's no separate "cancel seed" tool — if you
 seeded via `application_uuid` and no longer want the build to finish (wrong
 app, changed your mind, taking too long), call `close(session_id)` while
-it's still in progress. This tears down the background worker and its temp
-export directory; the session_id then behaves as closed.
+it's still in progress. During `"building"`, that step's heavy work runs in
+a background thread cancellation cannot stop, so the thread keeps running
+to completion on its own.
 
 ## Single-worker constraint (context, not something you control)
 

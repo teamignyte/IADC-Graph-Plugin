@@ -4,14 +4,19 @@ Canonical source: `graph_mcp/tools.py` (the shapes) and `graph_mcp/__main__.py`
 (the JSON-string wrapping + session error dicts). `tests/test_graph_mcp_docs_drift_guard.py`
 guards this file **token-level only**: every wire key `node_label`,
 `occurrence_count`, `total_matching` and every error string
-`unknown or expired session`, `session does not belong to this caller`,
-`node not found`, `session not ready` must appear backtick-wrapped somewhere
-below, forward-coupled from the code that produces them (named error
-constants; wire keys verified against real return values — a sibling check
-in the same suite also guards the 18-tool roster against `SKILL.md`'s own
-enumeration). It does **not** enforce full prose/shape equality — if a
-shape's structure changes beyond these guarded tokens, update this file by
-hand, same as before.
+`unknown or expired session`, `node not found`, `session not ready` must
+appear backtick-wrapped somewhere below, forward-coupled from the code that
+produces them (named error constants; wire keys verified against real
+return values — a sibling check in the same suite also guards the 18-tool
+roster against `SKILL.md`'s own enumeration). It does **not** enforce full
+prose/shape equality — if a shape's structure changes beyond these guarded
+tokens, update this file by hand, same as before.
+
+**Sessions are no longer principal-scoped (IV-342, 2026-08-05).** A session
+used to be readable only by the principal that seeded it, with a third error
+dict (`session does not belong to this caller`) for a mismatch. That check
+is retired — `session_id` alone is the capability, any caller may read any
+known session — so that error dict no longer exists; only the two below.
 
 **Every one of the 18 tools returns a JSON string**, not a raw object —
 `mcp.tool()` functions all end in `json.dumps(...)`. Parse the string before
@@ -274,7 +279,7 @@ Every read tool (`get_neighbors`, `get_node`, `callers_of`, `shortest_path`,
 `get_out_edges`, `get_in_edges`, `get_edge`, `edges_by_relation`, `list_nodes`,
 `find_nodes`, `graph_overview`, `reachable`, `report_changes`, `record_model`,
 `get_sail`) funnels through the same session-resolution check first and returns one of
-these three dicts verbatim on failure — check for `"error"` in the parsed
+these two dicts verbatim on failure — check for `"error"` in the parsed
 JSON before assuming you got a real result shape:
 
 ```json
@@ -282,54 +287,53 @@ JSON before assuming you got a real result shape:
 ```
 Unknown, already-closed, or TTL-expired `session_id`. Indistinguishable from
 a typo'd id — there's no way to tell "never existed" from "existed once."
-
-```json
-{"error": "session does not belong to this caller", "session_id": "<id>"}
-```
-The session exists but was seeded by a **different principal**. Distinct from
-the above on purpose — you cannot read another caller's session by guessing
-or being handed its `session_id`.
+(Before IV-342 there was a second, distinct dict here for a `session_id`
+presented by a different principal than the one that seeded it —
+`session_id` is no longer principal-scoped, so any known session resolves
+regardless of who's asking; see `references/session-lifecycle.md`.)
 
 ```json
 {"error": "session not ready", "session_id": "<id>", "state": "<current SessionState>"}
 ```
-Session is known and owned by you, but its `state` isn't one of the two
-queryable terminal states (`"ready"`/`"ready_with_warnings"`) — still in an
-in-progress phase (`"queued"`/`"exporting"`/`"downloading"`/`"building"`) or
-ended in a failure state (`"export_failed"`/`"export_timed_out"`/
-`"build_failed"`/`"failed"`). Poll `seed_status` instead of retrying the
-read tool. **Not returned by `seed_status` itself** — `seed_status` is the
-one call designed to resolve a session in any state, precisely so you have
-something non-rejecting to poll.
+Session is known, but its `state` isn't one of the two queryable terminal
+states (`"ready"`/`"ready_with_warnings"`) — still in an in-progress phase
+(`"queued"`/`"exporting"`/`"downloading"`/`"building"`) or ended in a
+failure state (`"export_failed"`/`"export_timed_out"`/`"build_failed"`/
+`"failed"`). Poll `seed_status` instead of retrying the read tool. **Not
+returned by `seed_status` itself** — `seed_status` is the one call designed
+to resolve a session in any state, precisely so you have something
+non-rejecting to poll.
 
-`seed_status` and `close` only ever return the first two of these three (they
+`seed_status` and `close` only ever return the first of these two (they
 never check readiness) — see their own sections below.
 
-## `close` — collapsed boolean, not the three-way error above
+## `close` — collapsed boolean, not the two-way error above
 
 ```json
 {"closed": true}
 ```
-Session existed, belonged to you, and was removed (also cancels an in-flight
-`application_uuid` build if the session was still in an in-progress phase).
+Session existed and was removed — regardless of who seeded it (IV-342:
+`close` is no longer principal-checked, same retirement as every read tool)
+— also cancels an in-flight `application_uuid` build if the session was
+still in an in-progress phase.
 
 ```json
 {"closed": false}
 ```
-**Collapses two different situations on purpose**: "unknown/already-closed/
-expired" and "belongs to a different principal" both report `false`. `close`
-never confirms or denies the existence of a session it doesn't own — don't
-try to infer which case you hit from the boolean alone.
+Unknown, already-closed, or expired `session_id`. (Before IV-342, `close`
+also collapsed a second case in here — "belongs to a different
+principal" — since it alone kept an ownership check after the read tools'
+was dropped. That asymmetry is gone too: `close` now succeeds for any known
+`session_id`, same as a read.)
 
-## `seed_status` errors — only two, no readiness dict
+## `seed_status` errors — only one, no readiness dict
 
 ```json
 {"error": "unknown or expired session", "session_id": "<id>"}
-{"error": "session does not belong to this caller", "session_id": "<id>"}
 ```
-Same two shapes as above. There is no third "not ready" error here — any
-non-terminal or failure `state` is a normal (non-error) response body for
-this tool specifically: `{"state": <SessionState>, "message": str|None}`,
+Same shape as above. There is no "not ready" error here — any non-terminal
+or failure `state` is a normal (non-error) response body for this tool
+specifically: `{"state": <SessionState>, "message": str|None}`,
 where `<SessionState>` is one of `"queued"`/`"exporting"`/`"downloading"`/
 `"building"` (in-progress), `"ready"`/`"ready_with_warnings"` (terminal
 success), or `"export_failed"`/`"export_timed_out"`/`"build_failed"`/
@@ -423,11 +427,10 @@ or a bare list:
   failure, an object_type the patcher can't handle); `detail` is `str(exc)`.
 
 If the session itself doesn't resolve, you get one of the standard session
-dicts — `unknown or expired session` / `session does not belong to this caller`
-/ `session not ready` (see "Session-resolution errors" above) — at the top
-level instead of a `results` envelope, same as every other read tool:
-`report_changes` funnels through the same session-resolution check, so all
-three apply, not just the first two.
+dicts — `unknown or expired session` / `session not ready` (see
+"Session-resolution errors" above) — at the top level instead of a
+`results` envelope, same as every other read tool: `report_changes` funnels
+through the same session-resolution check, so both apply.
 
 One more top-level (non-`results`) error unique to this tool, when no
 `ObjectFetcher` was injected and the LCP env vars aren't all set:
