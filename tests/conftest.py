@@ -24,8 +24,8 @@ def read_frontmatter(skill_md_path: Path) -> dict:
 
     Deliberately not a full YAML parser (no external dependency): every SKILL.md in this repo
     uses simple ``key: value`` frontmatter, optionally quoted, with no nested structures at the
-    top level. This is enough to check the fields these tests care about (name, description, and
-    whether disable-model-invocation is set at all) without pulling in PyYAML for one narrow use.
+    top level. This is enough to check the fields these tests care about (name, and whether
+    disable-model-invocation is set at all) without pulling in PyYAML for one narrow use.
     """
     text = skill_md_path.read_text(encoding="utf-8")
     match = re.match(r"^---\n(.*?)\n---\n", text, re.DOTALL)
@@ -51,6 +51,12 @@ def plugin_manifest() -> dict:
 @pytest.fixture(scope="session")
 def setup_skill_text() -> str:
     """Whitespace-collapsed so a prose sentence wrapped across a source line break (this file
-    hand-wraps at ~100 chars) still matches a single-line search phrase."""
+    hand-wraps at ~100 chars) still matches a single-line search phrase. Frontmatter is stripped
+    first (IV-441 phase-1 fix round 1): `description` is now a routinely-edited, model-facing
+    trigger surface, and sharing this fixture with it let an ordinary description edit red an
+    unrelated safety anchor by coincidental substring collision. None of the anchors below asserts
+    on frontmatter content — verified by comparing each one's count with and against the stripped
+    text before this split shipped."""
     raw = (SKILLS_DIR / "setup" / "SKILL.md").read_text(encoding="utf-8")
-    return " ".join(raw.split())
+    body = re.sub(r"^---\n.*?\n---\n", "", raw, count=1, flags=re.DOTALL)
+    return " ".join(body.split())

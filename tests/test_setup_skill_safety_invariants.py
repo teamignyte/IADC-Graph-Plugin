@@ -4,11 +4,12 @@ skills/setup/ writes a graph API key into a client repo's .mcp.json, gated behin
 checks (is `.mcp.json` really ignored, is it tracked, is the ignore rule actually durable) before
 anything is written. These tests can't execute the skill directly — it's instructions for Claude,
 not a program — so they check the prose itself: that each required gate's literal command is still
-present at its documented count, and that 13 of the file's 16 no-write halts are each still paired
-with their own "write nothing" consequence in one literal span — the remaining three are named, not
-anchored, below — rather than merely checking that some safety-flavored words appear somewhere in
-the file. A test that only checks "the phrase exists" can't tell a real gate from a lone reference
-to one, and can't tell "don't write" from its own negation.
+present at its documented count, and that 14 of the file's 17 no-write halts are each still paired
+with their own "write nothing" consequence in one literal span — 13 in the list below, and the
+same-session double-chain halt anchored the same way by its own test further down — the remaining
+three are named, not anchored, at all — rather than merely checking that some safety-flavored words
+appear somewhere in the file. A test that only checks "the phrase exists" can't tell a real gate
+from a lone reference to one, and can't tell "don't write" from its own negation.
 
 Every count below was read directly off the current file and is asserted as an exact equality
 (not merely "at least one"), so a single deleted or altered occurrence turns the test red — not
@@ -184,15 +185,40 @@ def test_setup_skill_verifies_head_not_just_working_tree(setup_skill_text):
 
 def test_setup_skill_names_double_chain_as_common_cause_in_absent_branch(setup_skill_text):
     """Turns red if step 1's S1a "Absent" branch loses the sentence naming a same-session double
-    chain as the explanation for an ambiguous-looking entry. Model-invocability (IV-441) means both
-    `iadc-advisor:setup` and `iadc-tester:setup` can now chain into this skill in the same
+    *write* (not merely a run — see the exclusion test below for why that distinction has its own
+    anchor) as the explanation for an ambiguous-looking entry. Model-invocability (IV-441) means
+    both `iadc-advisor:setup` and `iadc-tester:setup` can now chain into this skill in the same
     conversation; a user running both reaches this branch twice, and the second visit's "ambiguous"
     reading has a known cause (this session already wrote it) rather than being genuinely open.
-    Without this sentence the branch re-asks a question it already knows the answer to
-    (single-occurrence anchor)."""
+
+    The anchor spans the branch's own decision and its consequence in one literal, matching this
+    file's `_DECLINE_CONSEQUENCE_ANCHORS` convention above: a condition-only count would stay green
+    even if the consequence were inverted to re-ask and re-collect both values instead of stopping,
+    or if the stop were weakened to a mere note (single-occurrence anchor)."""
     assert (
         setup_skill_text.count(
-            "If this same session already ran this skill, that already is the explanation"
+            "If this same session already wrote this entry (step 4's write ran and its read-back "
+            "confirmed the `iadc` block), that already is the explanation — say so and stop, "
+            "rather than presenting it as ambiguous:** the entry is configured and will go live "
+            "next session."
+        )
+        == 1
+    )
+
+
+def test_setup_skill_excludes_no_write_exits_from_the_double_chain_backstop(setup_skill_text):
+    """Turns red if S1a loses the sentence excluding a prior run that reached this branch without
+    writing — a decline, a step-4 gate failure, or choosing to leave the entry standing — from the
+    backstop above. Four documented exits reach this branch having written nothing (SKILL.md's own
+    S1a leave-it choice, step 2's ignore-rule decline, step 3's tracked-file decline, step 4's gate
+    failure), and each leaves literal-looking values on file — exactly the state that re-enters this
+    branch. Without this sentence, a session that took any of those exits and is then chained into
+    again (from a second outer setup) would be told the entry is "configured" when nothing was ever
+    written — the regression this fix round (IV-441 phase 1, round 1) corrected (single-occurrence
+    anchor)."""
+    assert (
+        setup_skill_text.count(
+            "A prior run this session that reached this branch without writing doesn't qualify"
         )
         == 1
     )
