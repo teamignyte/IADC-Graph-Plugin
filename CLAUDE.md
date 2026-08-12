@@ -43,6 +43,15 @@ across those callers:
 
 `tests/test_skill_addresses.py` and `tests/test_plugin_manifest.py` check all three per commit.
 
+**Publish order.** A version of `iadc-advisor` or `iadc-tester` that chains into `iadc-graph:setup`
+directly — rather than telling the user to type it — must not publish before this repo's own
+model-invocable flip (IV-441 phase 1) does. Until that flip ships, `skills/setup/SKILL.md` carries
+`disable-model-invocation: true`, which strips it from every other skill's reach — "only the human
+typing its name can invoke it, and no other skill can" — so a chain instruction against it fails
+outright. Neither caller pins a version on its `iadc-graph` dependency (`"dependencies":
+["iadc-graph"]` in both `plugin.json`s), so nothing mechanical enforces the order; publish here
+first.
+
 ## Tests
 
 `skills/` holds prose (`SKILL.md` instructions for Claude, not executable code), so the suite

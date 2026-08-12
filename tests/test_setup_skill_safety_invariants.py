@@ -1,15 +1,19 @@
-"""Regression checks for skills/setup/SKILL.md's credential-write safety gates.
+"""Regression checks for skills/setup/SKILL.md's credential-write safety gates and its frontmatter
+trigger surface.
 
 skills/setup/ writes a graph API key into a client repo's .mcp.json, gated behind a chain of git
 checks (is `.mcp.json` really ignored, is it tracked, is the ignore rule actually durable) before
-anything is written. These tests can't execute the skill directly — it's instructions for Claude,
-not a program — so they check the prose itself: that each required gate's literal command is still
-present at its documented count, and that 14 of the file's 17 no-write halts are each still paired
+anything is written; its frontmatter `description` gates whether the skill fires at all. These
+tests can't execute the skill directly — it's instructions for Claude, not a program — so they
+check the prose itself, in three categories: that each required gate's literal command is still
+present at its documented count; that 14 of the file's 17 no-write halts are each still paired
 with their own "write nothing" consequence in one literal span — 13 in the list below, and the
 same-session double-chain halt anchored the same way by its own test further down — the remaining
-three are named, not anchored, at all — rather than merely checking that some safety-flavored words
-appear somewhere in the file. A test that only checks "the phrase exists" can't tell a real gate
-from a lone reference to one, and can't tell "don't write" from its own negation.
+three are named, not anchored, at all; and that the frontmatter `description`'s three trigger
+branches (missing/failed entry, hand-off from another IADC setup skill, direct user ask) are each
+still present — rather than merely checking that some safety-flavored words appear somewhere in
+the file. A test that only checks "the phrase exists" can't tell a real gate from a lone reference
+to one, and can't tell "don't write" from its own negation.
 
 Every count below was read directly off the current file and is asserted as an exact equality
 (not merely "at least one"), so a single deleted or altered occurrence turns the test red — not
@@ -258,3 +262,46 @@ def test_setup_skill_description_excludes_same_session_write_from_tools_unrespon
         )
         == 1
     )
+
+
+# The frontmatter `description`'s "Use when:" clause carries three trigger branches (IV-441's own
+# AC): a missing/failed `iadc` MCP entry, a hand-off from another IADC setup skill, and a direct
+# user ask. Each anchor is that branch's own condition, not the exception clause nested inside the
+# first branch — that clause already has its own guard above — so deleting any one branch reds only
+# that branch's entry, matching this file's `_DECLINE_CONSEQUENCE_ANCHORS` convention of pairing a
+# guard to the exact span a branch's removal would touch.
+_TRIGGER_BRANCH_ANCHORS = [
+    (
+        "missing/failed iadc MCP entry",
+        "the `iadc` MCP entry is missing, placeholder, or",
+    ),
+    (
+        "hand-off from another IADC setup skill",
+        "another IADC setup skill (`iadc-advisor:setup`, `iadc-tester:setup`) hands off here",
+    ),
+    (
+        "direct user ask",
+        "the user asks directly",
+    ),
+]
+
+
+def test_setup_skill_description_pins_all_three_trigger_branches():
+    """Turns red if any of the frontmatter `description`'s three "Use when:" trigger branches is
+    deleted: the missing/failed-entry condition, the hand-off clause naming `iadc-advisor:setup`
+    and `iadc-tester:setup`, or the direct-user-ask branch. Before this test, only the first
+    branch's own exception clause ("unless this session already wrote it") had a guard — the test
+    above. The other two, including the hand-off clause that is this whole branch's reason to
+    exist, had none: deleting either left the suite green (IV-441 phase 1 fix round 3's Major 1).
+
+    Sourced from `read_frontmatter`, not `setup_skill_text`, for the same reason as the test above:
+    round 1's own fixture split (m4) put `description` out of that fixture's reach on purpose. Each
+    anchor is a branch's own condition text, not its full parenthetical detail or the punctuation
+    joining it to its neighbours, so rewording anything outside these three spans — including the
+    already-guarded exception clause nested in the first branch — leaves this test green; it does
+    not re-couple `description` to the body fixture the way the pre-m4 shape did."""
+    description = read_frontmatter(SKILLS_DIR / "setup" / "SKILL.md").get("description", "")
+    missing = [
+        label for label, phrase in _TRIGGER_BRANCH_ANCHORS if description.count(phrase) != 1
+    ]
+    assert not missing, f"trigger branch(es) missing or altered in description: {missing}"
