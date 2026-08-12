@@ -45,7 +45,7 @@ across those callers:
 
 **Publish order.** A version of `iadc-advisor` or `iadc-tester` that chains into `iadc-graph:setup`
 directly — rather than telling the user to type it — must not publish before this repo's own
-model-invocable flip (IV-441 phase 1) does. Until that flip ships, `skills/setup/SKILL.md` carries
+model-invocable flip (IV-441 phase 1) does. Until that flip shipped, `skills/setup/SKILL.md` carried
 `disable-model-invocation: true`, which strips it from every other skill's reach — "only the human
 typing its name can invoke it, and no other skill can" — so a chain instruction against it fails
 outright. Neither caller pins a version on its `iadc-graph` dependency (`"dependencies":
