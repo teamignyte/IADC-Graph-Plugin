@@ -1,7 +1,6 @@
 ---
 name: setup
-description: Configure the iadc-graph plugin's MCP connection for this repo — collect the graph URL and API key, write the `iadc` entry into `.mcp.json` (merging, never overwriting, preserving every other server), and run the git-safety sequence a credential needs before any value is written. Designed as the one place in the family that writes this entry, so other IADC plugins can point here instead of carrying their own copy. Skips itself when a working entry already exists and is protected — a tracked file still gets the full safety sequence, and a working-but-unprotected one gets flagged rather than waved through. Works with neither other IADC plugin installed. Run once per repo, before the graph is needed.
-disable-model-invocation: true
+description: Configure the `iadc` graph MCP connection for this repo — collect the graph URL and API key and write the `iadc` entry into `.mcp.json`, merging rather than overwriting. Use when: the `iadc` MCP entry is missing, placeholder, or — unless this session already wrote it — its tools aren't responding this session (expected until the next session starts, not a reason to reconfigure); another IADC setup skill (`iadc-advisor:setup`, `iadc-tester:setup`) hands off here; the user asks directly. Runs a git-safety sequence before any write. Skips itself when a working, protected entry already exists. Works with neither other IADC plugin installed. Run once per repo.
 ---
 
 # Setup
@@ -41,9 +40,15 @@ explicitly when it's actually time to write). Look at the `iadc` entry, if there
   - **Absent** → on record, but not confirmed from here, and that is genuinely ambiguous rather than
     a "no": the entry could be wrong, or it could just be a value nothing has loaded yet, because a
     `.mcp.json` edit only takes effect on the *next* session — a value written five minutes ago in
-    this same session would look identical to a wrong one from this vantage point. Say both readings
-    plainly and ask: enter fresh values now (treat as unconfigured — continue to step 2), or leave it
-    standing and check again after restarting? On "leave it," stop without writing anything.
+    this same session would look identical to a wrong one from this vantage point. **If this same
+    session already wrote this entry (step 4's write ran and its read-back confirmed the `iadc`
+    block), that already is the explanation — say so and stop, rather than presenting it as
+    ambiguous:** the entry is configured and will go live next session. **A prior run this session
+    that reached this branch without writing doesn't qualify — a decline, a gate failure, or
+    choosing to leave the entry standing all leave the ambiguity exactly as genuine as a first
+    visit, and that run's values-still-needed report still stands.** Otherwise, say both readings
+    plainly and ask: enter fresh values now (treat as unconfigured — continue to step 2), or leave
+    it standing and check again after restarting? On "leave it," stop without writing anything.
   - **Present** → before calling this "working," check `git ls-files --error-unmatch .mcp.json`
     (repo root) — a connection succeeding is not the same question as a credential being safe:
     - **Untracked** → not being in the index only means nothing has staged it — it says nothing about

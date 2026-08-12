@@ -1,12 +1,17 @@
-"""Regression checks for skills/setup/SKILL.md's credential-write safety gates.
+"""Regression checks for skills/setup/SKILL.md's credential-write safety gates and its frontmatter
+trigger surface.
 
 skills/setup/ writes a graph API key into a client repo's .mcp.json, gated behind a chain of git
 checks (is `.mcp.json` really ignored, is it tracked, is the ignore rule actually durable) before
-anything is written. These tests can't execute the skill directly — it's instructions for Claude,
-not a program — so they check the prose itself: that each required gate's literal command is still
-present at its documented count, and that 13 of the file's 16 no-write halts are each still paired
-with their own "write nothing" consequence in one literal span — the remaining three are named, not
-anchored, below — rather than merely checking that some safety-flavored words appear somewhere in
+anything is written; its frontmatter `description` gates whether the skill fires at all. These
+tests can't execute the skill directly — it's instructions for Claude, not a program — so they
+check the prose itself, in three categories: that each required gate's literal command is still
+present at its documented count; that 14 of the file's 17 no-write halts are each still paired
+with their own "write nothing" consequence in one literal span — 13 in the list below, and the
+same-session double-chain halt anchored the same way by its own test further down — the remaining
+three are named, not anchored, at all; and that the frontmatter `description`'s three trigger
+branches (missing/failed entry, hand-off from another IADC setup skill, direct user ask) are each
+still present — rather than merely checking that some safety-flavored words appear somewhere in
 the file. A test that only checks "the phrase exists" can't tell a real gate from a lone reference
 to one, and can't tell "don't write" from its own negation.
 
@@ -16,6 +21,7 @@ just wholesale removal.
 """
 
 from conftest import setup_skill_text  # noqa: F401 (fixture import for clarity)
+from conftest import SKILLS_DIR, read_frontmatter
 
 # Thirteen places across steps 1-4 where the flow stops without writing — either the user declined
 # an offered git action, or the skill itself halted on a state it won't write through. Each entry
@@ -180,3 +186,122 @@ def test_setup_skill_verifies_head_not_just_working_tree(setup_skill_text):
     of its documented sites — the exact gap step 4 calls out as "tempting to skip"."""
     assert setup_skill_text.count("cat-file -e HEAD:.mcp.json") == 6
     assert setup_skill_text.count("cat-file -e HEAD:.gitignore") == 3
+
+
+def test_setup_skill_names_double_chain_as_common_cause_in_absent_branch(setup_skill_text):
+    """Turns red if step 1's S1a "Absent" branch loses the sentence naming a same-session double
+    *write* (not merely a run — see the exclusion test below for why that distinction has its own
+    anchor) as the explanation for an ambiguous-looking entry. Model-invocability (IV-441) means
+    both `iadc-advisor:setup` and `iadc-tester:setup` can now chain into this skill in the same
+    conversation; a user running both reaches this branch twice, and the second visit's "ambiguous"
+    reading has a known cause (this session already wrote it) rather than being genuinely open.
+
+    The anchor spans the branch's own decision and its consequence in one literal, matching this
+    file's `_DECLINE_CONSEQUENCE_ANCHORS` convention above: a condition-only count would stay green
+    even if the consequence were inverted to re-ask and re-collect both values instead of stopping,
+    or if the stop were weakened to a mere note (single-occurrence anchor)."""
+    assert (
+        setup_skill_text.count(
+            "If this same session already wrote this entry (step 4's write ran and its read-back "
+            "confirmed the `iadc` block), that already is the explanation — say so and stop, "
+            "rather than presenting it as ambiguous:** the entry is configured and will go live "
+            "next session."
+        )
+        == 1
+    )
+
+
+def test_setup_skill_excludes_no_write_exits_from_the_double_chain_backstop(setup_skill_text):
+    """Turns red if S1a loses the sentence excluding a prior run that reached this branch without
+    writing — a decline, a step-4 gate failure, or choosing to leave the entry standing — from the
+    backstop above. Four documented exits reach this branch having written nothing (SKILL.md's own
+    S1a leave-it choice, step 2's ignore-rule decline, step 3's tracked-file decline, step 4's gate
+    failure), and each leaves literal-looking values on file — exactly the state that re-enters this
+    branch. Without this sentence, a session that took any of those exits and is then chained into
+    again (from a second outer setup) would be told the entry is "configured" when nothing was ever
+    written — the regression this fix round (IV-441 phase 1, round 1) corrected.
+
+    The anchor spans the exclusion's own decision and its consequence in one literal, the same
+    `_DECLINE_CONSEQUENCE_ANCHORS` convention the sibling anchor above follows: a condition-only
+    span (round 1's own shipped anchor, ending mid-sentence at "...doesn't qualify") stays green
+    even when the branch is re-routed to the stop it exists to prevent, or when the tail is
+    weakened or dropped — that gap was IV-441 phase 1 fix round 2's Major 1 (single-occurrence
+    anchor)."""
+    assert (
+        setup_skill_text.count(
+            "A prior run this session that reached this branch without writing doesn't qualify "
+            "— a decline, a gate failure, or choosing to leave the entry standing all leave the "
+            "ambiguity exactly as genuine as a first visit, and that run's values-still-needed "
+            "report still stands."
+        )
+        == 1
+    )
+
+
+def test_setup_skill_description_excludes_same_session_write_from_tools_unresponsive_trigger():
+    """Turns red if the frontmatter `description`'s scoping clause — pairing the "tools aren't
+    responding this session" trigger sub-condition with its "unless this session already wrote it"
+    exception — is deleted, has its exception inverted, is downgraded to a non-binding note, or is
+    lost along with the whole `description:` line (single-occurrence anchor on the paired span).
+
+    Sourced from `read_frontmatter`, not `setup_skill_text`: round 1's own fixture split (m4) put
+    `description` out of that fixture's reach on purpose, so a guard for it has to read the field
+    directly. `.get("description", "")` rather than `["description"]` is what makes deleting the
+    whole line a count mismatch here rather than a `KeyError` — the same failure mode as every
+    other axis, not a different one.
+
+    This pins the words, not the behaviour: `description` is model-facing prose with no evaluator
+    but the model, so passing does not prove a session actually treats "wrote it" as false once it
+    has lost its own memory of writing — only that the clause a model would need to read is still
+    there, still paired with the sub-condition it scopes, and would go missing or invert loudly
+    rather than silently."""
+    description = read_frontmatter(SKILLS_DIR / "setup" / "SKILL.md").get("description", "")
+    assert (
+        description.count(
+            "or — unless this session already wrote it — its tools aren't responding this session"
+        )
+        == 1
+    )
+
+
+# The frontmatter `description`'s "Use when:" clause carries three trigger branches (IV-441's own
+# AC): a missing/failed `iadc` MCP entry, a hand-off from another IADC setup skill, and a direct
+# user ask. Each anchor is that branch's own condition, not the exception clause nested inside the
+# first branch — that clause already has its own guard above — so deleting any one branch reds only
+# that branch's entry, matching this file's `_DECLINE_CONSEQUENCE_ANCHORS` convention of pairing a
+# guard to the exact span a branch's removal would touch.
+_TRIGGER_BRANCH_ANCHORS = [
+    (
+        "missing/failed iadc MCP entry",
+        "the `iadc` MCP entry is missing, placeholder, or",
+    ),
+    (
+        "hand-off from another IADC setup skill",
+        "another IADC setup skill (`iadc-advisor:setup`, `iadc-tester:setup`) hands off here",
+    ),
+    (
+        "direct user ask",
+        "the user asks directly",
+    ),
+]
+
+
+def test_setup_skill_description_pins_all_three_trigger_branches():
+    """Turns red if any of the frontmatter `description`'s three "Use when:" trigger branches is
+    deleted: the missing/failed-entry condition, the hand-off clause naming `iadc-advisor:setup`
+    and `iadc-tester:setup`, or the direct-user-ask branch. Before this test, only the first
+    branch's own exception clause ("unless this session already wrote it") had a guard — the test
+    above. The other two, including the hand-off clause that is this whole branch's reason to
+    exist, had none: deleting either left the suite green (IV-441 phase 1 fix round 3's Major 1).
+
+    Sourced from `read_frontmatter`, not `setup_skill_text`, for the same reason as the test above:
+    round 1's own fixture split (m4) put `description` out of that fixture's reach on purpose. Each
+    anchor is a branch's own condition text, not the punctuation joining it to its neighbours, so
+    rewording anything outside these three spans — including the
+    already-guarded exception clause nested in the first branch — leaves this test green; it does
+    not re-couple `description` to the body fixture the way the pre-m4 shape did."""
+    description = read_frontmatter(SKILLS_DIR / "setup" / "SKILL.md").get("description", "")
+    missing = [
+        label for label, phrase in _TRIGGER_BRANCH_ANCHORS if description.count(phrase) != 1
+    ]
+    assert not missing, f"trigger branch(es) missing or altered in description: {missing}"
