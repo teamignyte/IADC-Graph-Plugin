@@ -54,9 +54,12 @@ def setup_skill_text() -> str:
     hand-wraps at ~100 chars) still matches a single-line search phrase. Frontmatter is stripped
     first (IV-441 phase-1 fix round 1): `description` is now a routinely-edited, model-facing
     trigger surface, and sharing this fixture with it let an ordinary description edit red an
-    unrelated safety anchor by coincidental substring collision. None of the anchors below asserts
-    on frontmatter content — verified by comparing each one's count with and against the stripped
-    text before this split shipped."""
+    unrelated safety anchor by coincidental substring collision. None of
+    `test_setup_skill_safety_invariants.py`'s anchors that read this fixture —
+    `_DECLINE_CONSEQUENCE_ANCHORS` included — assert on frontmatter content, verified by comparing
+    each one's count with and without the stripped text before this split shipped. `description`'s
+    own load-bearing clause gets its own guard instead, read via `read_frontmatter` rather than
+    this fixture (IV-441 phase-1 fix round 2)."""
     raw = (SKILLS_DIR / "setup" / "SKILL.md").read_text(encoding="utf-8")
     body = re.sub(r"^---\n.*?\n---\n", "", raw, count=1, flags=re.DOTALL)
     return " ".join(body.split())

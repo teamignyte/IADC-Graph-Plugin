@@ -17,6 +17,7 @@ just wholesale removal.
 """
 
 from conftest import setup_skill_text  # noqa: F401 (fixture import for clarity)
+from conftest import SKILLS_DIR, read_frontmatter
 
 # Thirteen places across steps 1-4 where the flow stops without writing — either the user declined
 # an offered git action, or the skill itself halted on a state it won't write through. Each entry
@@ -214,11 +215,46 @@ def test_setup_skill_excludes_no_write_exits_from_the_double_chain_backstop(setu
     failure), and each leaves literal-looking values on file — exactly the state that re-enters this
     branch. Without this sentence, a session that took any of those exits and is then chained into
     again (from a second outer setup) would be told the entry is "configured" when nothing was ever
-    written — the regression this fix round (IV-441 phase 1, round 1) corrected (single-occurrence
+    written — the regression this fix round (IV-441 phase 1, round 1) corrected.
+
+    The anchor spans the exclusion's own decision and its consequence in one literal, the same
+    `_DECLINE_CONSEQUENCE_ANCHORS` convention the sibling anchor above follows: a condition-only
+    span (round 1's own shipped anchor, ending mid-sentence at "...doesn't qualify") stays green
+    even when the branch is re-routed to the stop it exists to prevent, or when the tail is
+    weakened or dropped — that gap was IV-441 phase 1 fix round 2's Major 1 (single-occurrence
     anchor)."""
     assert (
         setup_skill_text.count(
-            "A prior run this session that reached this branch without writing doesn't qualify"
+            "A prior run this session that reached this branch without writing doesn't qualify "
+            "— a decline, a gate failure, or choosing to leave the entry standing all leave the "
+            "ambiguity exactly as genuine as a first visit, and that run's values-still-needed "
+            "report still stands."
+        )
+        == 1
+    )
+
+
+def test_setup_skill_description_excludes_same_session_write_from_tools_unresponsive_trigger():
+    """Turns red if the frontmatter `description`'s scoping clause — pairing the "tools aren't
+    responding this session" trigger sub-condition with its "unless this session already wrote it"
+    exception — is deleted, has its exception inverted, is downgraded to a non-binding note, or is
+    lost along with the whole `description:` line (single-occurrence anchor on the paired span).
+
+    Sourced from `read_frontmatter`, not `setup_skill_text`: round 1's own fixture split (m4) put
+    `description` out of that fixture's reach on purpose, so a guard for it has to read the field
+    directly. `.get("description", "")` rather than `["description"]` is what makes deleting the
+    whole line a count mismatch here rather than a `KeyError` — the same failure mode as every
+    other axis, not a different one.
+
+    This pins the words, not the behaviour: `description` is model-facing prose with no evaluator
+    but the model, so passing does not prove a session actually treats "wrote it" as false once it
+    has lost its own memory of writing — only that the clause a model would need to read is still
+    there, still paired with the sub-condition it scopes, and would go missing or invert loudly
+    rather than silently."""
+    description = read_frontmatter(SKILLS_DIR / "setup" / "SKILL.md").get("description", "")
+    assert (
+        description.count(
+            "or — unless this session already wrote it — its tools aren't responding this session"
         )
         == 1
     )
