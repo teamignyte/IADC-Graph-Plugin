@@ -296,8 +296,8 @@ def test_setup_skill_description_pins_all_three_trigger_branches():
 
     Sourced from `read_frontmatter`, not `setup_skill_text`, for the same reason as the test above:
     round 1's own fixture split (m4) put `description` out of that fixture's reach on purpose. Each
-    anchor is a branch's own condition text, not its full parenthetical detail or the punctuation
-    joining it to its neighbours, so rewording anything outside these three spans — including the
+    anchor is a branch's own condition text, not the punctuation joining it to its neighbours, so
+    rewording anything outside these three spans — including the
     already-guarded exception clause nested in the first branch — leaves this test green; it does
     not re-couple `description` to the body fixture the way the pre-m4 shape did."""
     description = read_frontmatter(SKILLS_DIR / "setup" / "SKILL.md").get("description", "")

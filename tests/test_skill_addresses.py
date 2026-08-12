@@ -26,8 +26,8 @@ def test_setup_skill_is_model_invocable():
     """`setup` writes a credential, but the boundary that makes that safe was never invocation
     posture — it's the explicit-consent gates inside the skill (before the `.gitignore` change, before
     the credential write), which run the same regardless of who or what triggered the skill. Now that
-    `iadc-advisor:setup` and `iadc-tester:setup` chain here directly instead of telling the user to
-    type `/iadc-graph:setup` by hand, the model must be able to invoke it — so
+    `iadc-advisor:setup` and `iadc-tester:setup` can chain here directly, the model must be able to
+    invoke it — so
     `disable-model-invocation` must be absent from the frontmatter, not merely set to `"false"`, since
     either `"true"` or a stray `"false"` key would still read as present to a caller checking for it."""
     fields = read_frontmatter(SKILLS_DIR / "setup" / "SKILL.md")
