@@ -24,8 +24,8 @@ def read_frontmatter(skill_md_path: Path) -> dict:
 
     Deliberately not a full YAML parser (no external dependency): every SKILL.md in this repo
     uses simple ``key: value`` frontmatter, optionally quoted, with no nested structures at the
-    top level. This is enough to check the fields these tests care about (name, description,
-    disable-model-invocation) without pulling in PyYAML for one narrow use.
+    top level. This is enough to check the fields these tests care about (name, description, and
+    whether disable-model-invocation is set at all) without pulling in PyYAML for one narrow use.
     """
     text = skill_md_path.read_text(encoding="utf-8")
     match = re.match(r"^---\n(.*?)\n---\n", text, re.DOTALL)

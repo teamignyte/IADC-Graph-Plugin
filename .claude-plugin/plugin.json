@@ -1,6 +1,6 @@
 {
   "name": "iadc-graph",
-  "version": "0.2.5",
+  "version": "0.3.0",
   "description": "Query an Appian application's App Graph — session lifecycle, traversal, blast radius, record model, SAIL retrieval — over the IADC graph MCP.",
   "author": { "name": "Ignyte Group" }
 }

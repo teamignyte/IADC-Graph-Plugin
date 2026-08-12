@@ -22,12 +22,16 @@ def test_setup_skill_directory_and_frontmatter_name():
     assert fields.get("name") == "setup"
 
 
-def test_setup_skill_is_not_model_invoked():
-    """`setup` writes a credential — it must only run when the user asks for it (`/iadc-graph:setup`
-    or an explicit hand-off from another skill), never because the model decided on its own that
-    setup looked relevant. `disable-model-invocation: true` is what enforces that."""
+def test_setup_skill_is_model_invocable():
+    """`setup` writes a credential, but the boundary that makes that safe was never invocation
+    posture — it's the explicit-consent gates inside the skill (before the `.gitignore` change, before
+    the credential write), which run the same regardless of who or what triggered the skill. Now that
+    `iadc-advisor:setup` and `iadc-tester:setup` chain here directly instead of telling the user to
+    type `/iadc-graph:setup` by hand, the model must be able to invoke it — so
+    `disable-model-invocation` must be absent from the frontmatter, not merely set to `"false"`, since
+    either `"true"` or a stray `"false"` key would still read as present to a caller checking for it."""
     fields = read_frontmatter(SKILLS_DIR / "setup" / "SKILL.md")
-    assert fields.get("disable-model-invocation") == "true"
+    assert "disable-model-invocation" not in fields
 
 
 def test_no_other_skill_directories_exist():

@@ -180,3 +180,19 @@ def test_setup_skill_verifies_head_not_just_working_tree(setup_skill_text):
     of its documented sites — the exact gap step 4 calls out as "tempting to skip"."""
     assert setup_skill_text.count("cat-file -e HEAD:.mcp.json") == 6
     assert setup_skill_text.count("cat-file -e HEAD:.gitignore") == 3
+
+
+def test_setup_skill_names_double_chain_as_common_cause_in_absent_branch(setup_skill_text):
+    """Turns red if step 1's S1a "Absent" branch loses the sentence naming a same-session double
+    chain as the explanation for an ambiguous-looking entry. Model-invocability (IV-441) means both
+    `iadc-advisor:setup` and `iadc-tester:setup` can now chain into this skill in the same
+    conversation; a user running both reaches this branch twice, and the second visit's "ambiguous"
+    reading has a known cause (this session already wrote it) rather than being genuinely open.
+    Without this sentence the branch re-asks a question it already knows the answer to
+    (single-occurrence anchor)."""
+    assert (
+        setup_skill_text.count(
+            "If this same session already ran this skill, that already is the explanation"
+        )
+        == 1
+    )
