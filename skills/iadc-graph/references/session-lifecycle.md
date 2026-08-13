@@ -104,22 +104,43 @@ one of the four failure states (`message` carries the reason — no graph
 will ever attach; re-`seed` if you want to retry). There's no push/webhook —
 poll on your own cadence.
 
-**A ready `application_uuid`/`ready_with_warnings` seed also, separately and
-best-effort, persists a durable Graph Snapshot** (visible via the Graph
-service's `GET /snapshots` and the Portal, not through this MCP surface) —
-but that persistence starts *after* the session reaches one of those two
-states, not atomically with it, and can take as long as the render itself
-(~90s for a 16.3k-node application). If you (or whatever you're driving on
-behalf of) care about the Snapshot showing up in that list — not just about
-reading the session's graph via `session_id`, which *is* immediately
-available once the session is ready — don't treat readiness as proof the
-Snapshot already exists. **You have no way to check from inside this MCP
-session** (round-2 fix wave, F9): the `iadc` server's tool roster has no
+**Every `application_uuid` seed shows up in `GET /snapshots` immediately, in
+an in-progress state that keeps advancing through the same
+exporting/downloading/building phases `seed_status` reports** (visible via
+the Graph service's `GET /snapshots` and the Portal, not through this MCP
+surface — same as a UUID submitted directly to `POST /snapshots/uuid`, the
+HTTP door this ticket adds, which drives this exact same seed path; a
+Portal *form* for typing one in also posts to this same door) — but
+that row is in-memory only, not the durable artifact, until the seed
+reaches `ready`/`ready_with_warnings`: only then does the FULL Snapshot
+(rendered view, metadata, retained export) commit to disk and become
+durable, which can take as long as the render itself (~90s for a
+16.3k-node application) after readiness, not atomically with it. If you (or
+whatever you're driving on behalf of) care about the Snapshot's full
+artifacts existing — not just about reading the session's graph via
+`session_id`, which *is* immediately available once the session is ready —
+don't treat readiness as proof the committed Snapshot already exists. A row
+that ends anywhere other than `ready`/`ready_with_warnings` still stays
+listed too, rather than disappearing or sticking at `"queued"` forever.
+Most of the time that's a terminal failure state
+(`"export_failed"`/`"export_timed_out"`/`"build_failed"`/`"failed"`) with a
+readable message — done for good, nothing further will change it. The one
+exception: if you `close()` a session (or it TTLs out) while its render is
+genuinely still in flight, the still-running thread can't be stopped, so
+the row instead shows `"interrupted"` — not terminal — until that render's
+own commit lands, at which point it self-heals to `ready`/
+`ready_with_warnings` on its own, bounded by the same render-duration
+window as above. The Portal keeps refreshing the page while a row holds
+either an in-progress phase or `"interrupted"`, so that self-heal is
+observable there without a manual reload.
+**You have no way to check any of this from inside this MCP session**
+(round-2 fix wave, F9): the `iadc` server's tool roster has no
 snapshot-listing tool, so `GET /snapshots` is reachable only to a human,
 directly or via the Portal — not to whatever is driving this `seed` call.
 If you need to know when the Snapshot lands, that's a question for a human
 with Portal/HTTP access, not something to poll for yourself; otherwise just
-keep in mind it's eventual, not instant.
+keep in mind the full artifact is eventual, not instant, even though the
+row itself appears right away.
 
 An `export_ref` session's `seed_status` will just immediately confirm
 `"ready"` — harmless to call, never necessary.
