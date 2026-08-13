@@ -10,7 +10,7 @@ Every node has exactly one `kind`. Only `kind == "artifact"` nodes also carry
 (what fields it carries, how its label is composed); `object_type` is *which
 kind of Appian design object* an artifact node represents.
 
-## `kind` — the 10 values
+## `kind` — the 11 values
 
 | `kind` | What it is |
 |---|---|
@@ -24,6 +24,7 @@ kind of Appian design object* an artifact node represents.
 | `recordAction` | A record type action, bare UUID (`refId-<uuid>`). Schema-registered. Same node is targeted by both `defines_action` (structural, declaring RT → action) and `invokes_record_action` (reference, caller → action) — never duplicated. |
 | `recordRelationship` | A record type relationship, bare UUID. Schema-registered. |
 | `recordFieldDisplayName` | A record field's configured Appian Display Name (`<displayName>`), id `f"{fieldNodeId}/displayName"` (synthetic — composes over the owning field's own id, which handles both the bare-UUID table-backed and `{rt_uuid}/{fieldName}` view-backed forms). Schema-registered. **Reference-only** — unlike the other three record-model kinds below, this one is NOT full-schema materialized; it exists only when a `urn:appian:record-field-properties` SAIL reference to it actually resolves, never for every declared field's Display Name. |
+| `sitePage` | A page declared inside a site (`<page>`) or portal (`<navigationNode>`), id `f"{site_uuid}/{page_uuid}"` (composite — keyed on the page's own uuid, matching the `site-page`/`portal-page` URN family's identity, NOT the page's urlStub, which stays a node attribute only). Schema-registered. Materialized for every declared page regardless of whether it renders a watched `<uiObject>` — NOT record-model (its owner is a site/portal artifact, not a record type). |
 
 `external`/`dangling`/`unknown` are the three **boundary** kinds — anything
 the resolver couldn't materialize as a full in-package node. Which one a
@@ -32,13 +33,14 @@ something this file's node-kind axis encodes further; treat all three as
 "not a real node in this package, handle with care."
 
 The 5 record-model kinds (`recordView`, `recordField`, `recordAction`,
-`recordRelationship`, `recordFieldDisplayName`) are the ones registered in
-`NODE_KIND_SCHEMAS` — each has a defined attribute set, a label composer, a
-`patch_authoritative` flag, and (except `recordFieldDisplayName`, which is
-reference-only — see above) a structural fan-out contribution. This is the
-single place their shape is defined; if a tool result's fields for one of
-these kinds look surprising, check its schema entry in
-`resolver/node_kinds.py` before assuming a bug.
+`recordRelationship`, `recordFieldDisplayName`) plus `sitePage` (a site/
+portal's own declared substructure, not record-model) are the ones
+registered in `NODE_KIND_SCHEMAS` — each has a defined attribute set, a
+label composer, a `patch_authoritative` flag, and (except
+`recordFieldDisplayName`, which is reference-only — see above) a structural
+fan-out contribution. This is the single place their shape is defined; if a
+tool result's fields for one of these kinds look surprising, check its
+schema entry in `resolver/node_kinds.py` before assuming a bug.
 
 ## `object_type` — present ONLY on `kind == "artifact"` nodes
 

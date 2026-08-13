@@ -17,6 +17,7 @@ list):
 | Table-backed / UUID-backed record-model nodes (table-backed `recordField`, `recordRelationship`, `recordAction`) | The Appian object UUID, verbatim | `a1b2c3d4-...` |
 | `appian_builtin` | `f"appian:{name}"` — synthesized, not an Appian id | `appian:a!queryRecordType` |
 | `recordView` / view-backed `recordField` | `f"{rt_uuid}/{stub}"` composite — synthesized, Appian assigns no id here | `a1b2c3d4-.../myUrlStub` |
+| `sitePage` | `f"{site_uuid}/{page_uuid}"` composite — synthesized, keyed on the page's own uuid (matches the `site-page`/`portal-page` URN family's identity), NOT the page's urlStub | `a1b2c3d4-.../e5f6g7h8-...` |
 | Boundary nodes (`external`/`dangling`/`unknown`) | Priority-ordered: uuid, then name, then raw ref text | Varies — could be a UUID, an `appian:{name}` form, or literal malformed ref text |
 
 Full priority rules for boundary nodes (`ResolvedReference.boundary_node_id()`
@@ -46,10 +47,11 @@ the label string but the label as a whole is not the id — or `"⊘ {name}
 
 **The rule that matters in practice: always pass `id` exactly as returned by
 another tool call — never one you typed, guessed, or extracted from a label
-string.** This mirrors the Appian skill's UUID discipline
-(umbrella `.claude/skills/appian/references/tools-mcp.md`, "Critical Rule: Never
-Fabricate UUIDs") — same failure mode (silent 404-style `"node not found"`),
-same fix (retrieve, don't guess).
+string.** This mirrors the `appian` skill's own UUID discipline for its tool
+calls — never invent, guess, or reuse a UUID from a different environment;
+if you don't have one, stop and retrieve it — same
+failure mode (silent 404-style `"node not found"`), same fix (retrieve,
+don't guess).
 
 ## The bootstrapping problem: how do you get a first `node_id`?
 
@@ -92,9 +94,7 @@ step 1 above (or step 3 below) is as far as such a session can go. Where it
 is configured: when you have a human-given name for an Appian design object
 that isn't (yet) in this session's graph — or you're not sure it is, and
 want to resolve the name authoritatively before searching — resolve it via
-the `appian` MCP, exactly the way the `appian` skill requires for its own
-tool calls (umbrella `.claude/skills/appian/references/tools-mcp.md`, "UUID Sources"
-/ "Never Fabricate UUIDs"):
+the `appian` MCP:
 
 - `listRecordTypes` / `getRecordType` — record types
 - `listInterfaces` — interfaces

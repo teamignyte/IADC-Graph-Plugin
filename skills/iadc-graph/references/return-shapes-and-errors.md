@@ -207,13 +207,13 @@ read-only lookup for that text:
   type artifact's entries whose `field` matches that exact
   `detailViewCfg:{urlStub}` tag, same order/duplicates-kept semantics.
 - For every other kind (`appian_builtin`, the three boundary kinds
-  `external`/`dangling`/`unknown`, and the four non-view record-model kinds
-  `recordField`/`recordAction`/`recordRelationship`/`recordFieldDisplayName`)
-  — kinds that structurally never carry a SAIL body — plus an artifact or
-  recordView owner missing from the session's extracted artifacts (e.g. a
-  synthesized node with no corresponding Reader-extracted `Artifact`), or a
-  node with no `kind` attribute at all (IV-250, defensive fallback — not
-  expected to occur in practice):
+  `external`/`dangling`/`unknown`, the four non-view record-model kinds
+  `recordField`/`recordAction`/`recordRelationship`/`recordFieldDisplayName`,
+  and `sitePage`) — kinds that structurally never carry a SAIL body —
+  plus an artifact or recordView owner missing from the session's
+  extracted artifacts (e.g. a synthesized node with no corresponding
+  Reader-extracted `Artifact`), or a node with no `kind` attribute at all
+  (IV-250, defensive fallback — not expected to occur in practice):
 
 ```json
 {"node_id": "<node_id>", "node_label": "<str>", "sail": [], "reason": "..."}

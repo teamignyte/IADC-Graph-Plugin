@@ -1,6 +1,6 @@
 ---
 name: "iadc-graph"
-description: "MANDATORY skill for the IADC graph MCP (`iadc` server, tools surfaced as `mcp__iadc__*`, 18 tools). Provides the session lifecycle (seed -> seed_status -> read tools -> close, 30-min TTL), the node-id forms read tools require (never a display name — get a starting node_id from find_nodes/list_nodes), the 24-relation vocabulary (exact-match string, unknown relation -> [] not an error), the 10 node kinds/object_types, and the return-shape/error conventions the tool schemas can't express (compact enriched records, node_label as the wire key not `name`, occurrences only via get_edge, session-error dict shapes). Load BEFORE calling any `iadc` MCP tool. Covers: seed, seed_status, close, report_changes, get_neighbors, get_node, callers_of, shortest_path, get_out_edges, get_in_edges, get_edge, edges_by_relation, list_nodes, find_nodes, graph_overview, reachable, record_model, get_sail. Verbs: seed, traverse, find, list, path, callers, neighbors, reachable, blast radius, record model, get sail, close session."
+description: "MANDATORY skill for the IADC graph MCP (`iadc` server, tools surfaced as `mcp__iadc__*`, 18 tools). Provides the session lifecycle (seed -> seed_status -> read tools -> close, 30-min TTL), the node-id forms read tools require (never a display name — get a starting node_id from find_nodes/list_nodes), the 25-relation vocabulary (exact-match string, unknown relation -> [] not an error), the 11 node kinds/object_types, and the return-shape/error conventions the tool schemas can't express (compact enriched records, node_label as the wire key not `name`, occurrences only via get_edge, session-error dict shapes). Load BEFORE calling any `iadc` MCP tool. Covers: seed, seed_status, close, report_changes, get_neighbors, get_node, callers_of, shortest_path, get_out_edges, get_in_edges, get_edge, edges_by_relation, list_nodes, find_nodes, graph_overview, reachable, record_model, get_sail. Verbs: seed, traverse, find, list, path, callers, neighbors, reachable, blast radius, record model, get sail, close session."
 ---
 
 ## Why this matters
@@ -120,9 +120,9 @@ from finding the application to seed.)
   graphify visualization.
 - **Node ids are not always UUIDs.** Forms include a bare Appian UUID, a
   synthesized `appian:{name}` (built-ins), a composite `{rt_uuid}/{stub}`
-  (record views and view-backed fields), or raw ref text (some boundary
-  nodes). Always pass an `id` exactly as another tool returned it — never
-  construct or guess one.
+  (record views and view-backed fields), a composite `{site_uuid}/{page_uuid}`
+  (site/portal pages), or raw ref text (some boundary nodes). Always pass an
+  `id` exactly as another tool returned it — never construct or guess one.
 - **`relation` is an exact-match string, not fuzzy.** `edges_by_relation`
   with an unknown/misspelled relation returns `[]` — a valid empty result,
   not an error. A typo and "this relation genuinely doesn't occur" look
@@ -145,9 +145,9 @@ from finding the application to seed.)
 - **`get_sail`'s `sail: []` isn't always an error condition.** A real artifact
   with genuinely no SAIL (e.g. a constant) returns `sail: []` with no
   `reason` key; a kind that structurally never carries SAIL (`appian_builtin`,
-  the boundary kinds, the non-view record-model kinds) returns `sail: []`
-  PLUS a `reason` string. Check for the `reason` key, don't assume an empty
-  list always means "nothing extracted."
+  the boundary kinds, the non-view record-model kinds, or `sitePage`) returns
+  `sail: []` PLUS a `reason` string. Check for the `reason` key, don't assume
+  an empty list always means "nothing extracted."
 - **`get_sail` reflects a same-session `report_changes` patch/delete.** A
   patch rehydrates the reported uuid's SAIL immediately; a delete drops it
   (the node itself is gone, so `get_sail` returns the node-not-found error).
