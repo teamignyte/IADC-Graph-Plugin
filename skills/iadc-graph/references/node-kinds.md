@@ -21,7 +21,7 @@ kind of Appian design object* an artifact node represents.
 | `unknown` | A reference the resolver couldn't classify at all (malformed ref, unrecognized shape). |
 | `recordField` | A record type field (table-backed: bare UUID; view-backed synthetic: `{rt_uuid}/{fieldName}`). Schema-registered — see below. |
 | `recordView` | A record type detail view, id `f"{rt_uuid}/{urlStub}"` (synthetic — Appian assigns no view UUID). Schema-registered. |
-| `recordAction` | A record type action, bare UUID (`refId-<uuid>`). Schema-registered. Same node is targeted by both `defines_action` (structural, declaring RT → action) and `invokes_record_action` (reference, caller → action) — never duplicated. |
+| `recordAction` | A record type action, bare UUID (`refId-<uuid>`). Schema-registered. Same node is targeted by both `defines_action` (structural, declaring RT → action) and a resolved record-action `references` edge (caller → action) — never duplicated. |
 | `recordRelationship` | A record type relationship, bare UUID. Schema-registered. |
 | `recordFieldDisplayName` | A record field's configured Appian Display Name (`<displayName>`), id `f"{fieldNodeId}/displayName"` (synthetic — composes over the owning field's own id, which handles both the bare-UUID table-backed and `{rt_uuid}/{fieldName}` view-backed forms). Schema-registered. **Reference-only** — unlike the other three record-model kinds below, this one is NOT full-schema materialized; it exists only when a `urn:appian:record-field-properties` SAIL reference to it actually resolves, never for every declared field's Display Name. |
 | `sitePage` | A page declared inside a site (`<page>`) or portal (`<navigationNode>`), id `f"{site_uuid}/{page_uuid}"` (composite — keyed on the page's own uuid, matching the `site-page`/`portal-page` URN family's identity, NOT the page's urlStub, which stays a node attribute only). Schema-registered. Materialized for every declared page regardless of whether it renders a watched `<uiObject>` — NOT record-model (its owner is a site/portal artifact, not a record type). |
@@ -64,11 +64,14 @@ name). Observed/mapped vocabulary:
 Other object_types exist in the wild (`connectedSystem`, `dataStore`,
 `group`, `aiSkill`, `datatype`, `groupType`, `translationSet`,
 `processModelFolder`, and anything else the Reader encounters under
-`content/`) — this list is not exhaustive, and `object_type` is a string, not
-a validated enum. Don't assume a fixed vocabulary when filtering.
+`content/`) — this list is not exhaustive. As a filter, `object_type` is
+checked against the object types present in the session's graph (the keys of
+`graph_overview`'s `node_count_by_object_type`): a value no node carries
+is an `unknown object_type` error listing them. `kind` is checked against
+the 11 kinds above.
 
 `recordRelationship` and `recordAction` also appear as *reference-resolution*
-`object_type` values (`_OBJECT_UUID_TYPE_MAP` in `graph/relations.py`) when
+`object_type` values (`_REFERENCEABLE_OBJECT_TYPES` in `graph/relations.py`) when
 classifying what a `resolved_via="object_uuid"` reference points at — but
 that's classifying the *reference*, not labeling a node; the node itself
 ends up `kind="recordRelationship"`/`kind="recordAction"`, not
@@ -76,8 +79,8 @@ ends up `kind="recordRelationship"`/`kind="recordAction"`, not
 
 ## Why this matters for tool calls
 
-`list_nodes`/`find_nodes`/`reachable` accept both `kind` and `object_type`
-filters. Since only `artifact` nodes carry `object_type`, filtering by
+`list_nodes`/`find_nodes` accept both `kind` and `object_type` filters
+(`reachable` takes neither). Since only `artifact` nodes carry `object_type`, filtering by
 `object_type` silently excludes every `appian_builtin`, boundary, and
 record-model node too — combine with `kind="artifact"` if that's not what
 you want, or omit `object_type` and post-filter.

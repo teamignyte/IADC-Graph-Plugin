@@ -126,22 +126,22 @@ wrong-node mixup at worst if you guess a real id in the wrong graph.
 **`edges_by_relation(session_id, relation)`** needs only a relation name —
 no starting node at all. Useful when you don't have any name or id to search
 on, but you know the *kind of connection* you're interested in (e.g. "show
-me everything that calls a built-in," `relation="calls_builtin"`, or
+me every connected-system dependency," `relation="uses_connected_system"`, or
 "show me every record-type relationship," `relation="declares"`). Each
 returned edge record carries a fully enriched `source`/`target`
 (`{id, kind, node_label, object_type?}`), so this doubles as a discovery
-tool — grab the `id` off whichever end you need and proceed. An
-unrecognized/misspelled relation returns `[]`, not an error, so check the
-relation string against `references/relation-vocabulary.md` if you get
-nothing back and expected results.
+tool — grab the `id` off whichever end you need and proceed. The records
+arrive in an envelope (`edges`, `returned`, `total_matching`,
+`truncated`; `limit` defaults to 200). A misspelled relation is an error
+naming the valid ones (`references/relation-vocabulary.md`).
 
 ## After you have a verified `node_id`
 
-Every subsequent traversal call (`get_neighbors`, `get_node`, `callers_of`,
-`shortest_path`, `get_out_edges`/`get_in_edges`, `get_edge`, `reachable`)
-takes that same `id` unchanged. Their own compact-record outputs (`{id,
-kind, node_label, object_type?}`) are themselves valid inputs for the next
-hop — chaining `get_neighbors` → pick an `id` from the result → `get_node`
-on it is the normal pattern. You only re-enter the bootstrapping steps above
+Every subsequent traversal call (`get_node`, `shortest_path`, `get_edges`,
+`get_edge`, `reachable`, `record_model`, `get_sail`) takes that same `id`
+unchanged. Their own compact-record outputs (`{id, kind, node_label,
+object_type?}`) are themselves valid inputs for the next hop — chaining
+`get_edges` → pick a `target.id` from the result → `get_node` on it is the
+normal pattern. You only re-enter the bootstrapping steps above
 when you need a node you have no path to yet (a fresh name, or a relation
 you haven't explored).

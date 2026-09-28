@@ -31,15 +31,12 @@ pass `depth=1` to cap it to direct dependents only, or raise/drop `limit`
 real count and you're only seeing `returned` of them; re-run with a higher
 `limit` before concluding the impact is small.
 
-**One-hop-only variant:** if you just need direct callers/dependents (not
-the transitive closure), use `callers_of(session_id, node_id=X)` — filters
-strictly to `calls`-relation in-edges (rule/interface/decision invocations),
-excluding `calls_builtin`/`calls_integration`/`references`/etc. For the full
-one-hop in-edge set across *every* relation (including `references`,
-`uses_record_field`, `secured_by`, ...), use
-`get_in_edges(session_id, node_id=X)` instead — it returns full edge records
-(`relation`, `provenance`, `occurrence_count`), not just the compact node
-list `callers_of`/`get_neighbors` give you.
+**One-hop-only variant:** if you just need direct dependents (not the
+transitive closure), use `get_edges(session_id, node_id=X, direction="in")` —
+the one-hop in-edge set across *every* relation (including `references`,
+`secured_by`, `has_field`, ...), as compact edge records (`relation`,
+`provenance`, `occurrence_count`). Leave `relation` unset: a dependent can
+reach X through a structural relation as well as `references`.
 
 ## 2. Dependency analysis — "what does X depend on"
 
@@ -52,11 +49,11 @@ reachable(session_id, node_id=X, direction="out")
 `direction="out"` walks successors transitively — the full transitive
 dependency closure of X. Same `depth`/`limit` knobs as §1.
 
-**One-hop variant:** `get_out_edges(session_id, node_id=X)` for X's direct
-out-edges with relation/provenance attached (e.g. to see whether X depends
-on something via `calls` vs. `uses_record_type` vs. `references`), or
-`get_neighbors(session_id, node_id=X, direction="out")` for just the compact
-node list of direct successors across every relation.
+**One-hop variant:** `get_edges(session_id, node_id=X, direction="out")` for
+X's direct out-edges with relation/provenance attached (e.g. to tell a
+`references` dependency from a structural `has_field`/`secured_by` link; what
+X references is the target node's `kind`/`object_type`). The far ends are the
+`target` records; a target joined by two relations appears once per relation.
 
 ## 3. Record view -> interface — "what interface renders this record view"
 
@@ -65,23 +62,23 @@ renders via.
 
 **Call:**
 ```
-get_out_edges(session_id, node_id=<recordView node id, "{rt_uuid}/{urlStub}">)
+get_edges(session_id, node_id=<recordView node id>, direction="out", relation="references")
 ```
-Filter the returned edge list to `relation == "renders_via"` — the record
-view's `uiExpr` reference to the rendering interface. The edge's `source` is
-the `recordView` node itself (not the owning record type — `renders_via` is
-re-sourced from the view, ADR 0028), and `target` is the interface (or an
+A record view's only reference edge is its `uiExpr` reference to the rendering
+interface. The edge's `source` is the `recordView` node itself (not the
+owning record type — the reference is re-sourced from the view, ADR 0028),
+and `target` is the interface (or an
 `external`/`dangling`/`unknown` boundary node if it doesn't resolve
 in-package).
 
-**To find the record view node id first:** `get_out_edges`/`list_nodes` on
-the owning record type, filtered to `relation == "has_view"` — its target is
-the `recordView` node id you need. Or `find_nodes(session_id, query=<urlStub
+**To find the record view node id first:** `get_edges(session_id,
+node_id=<record type id>, direction="out", relation="has_view")` — each
+target is a `recordView` node id. Or `find_nodes(session_id, query=<urlStub
 or owner name>, kind="recordView")`.
 
 **Full occurrence detail (SAIL field tag):** if you need the exact
 `sail_field` this reference came from, use `get_edge` (§4) on the
-`renders_via` triple — the reader tags it
+view's `references` triple — the reader tags it
 `sail_field == "detailViewCfg:{urlStub}"`.
 
 ## 4. Path tracing — "how does X reach Y" / "is there a route from X to Y"
@@ -106,9 +103,9 @@ exists.
 
 ## 5. Reference drill-down — exact SAIL source location(s)
 
-**Goal:** given an edge you already know about (e.g. from `get_out_edges`,
-`get_in_edges`, or `edges_by_relation`), find every exact place in the SAIL
-source that produced it.
+**Goal:** given an edge you already know about (e.g. from `get_edges` or
+`edges_by_relation`), find every exact place in the SAIL source that produced
+it.
 
 **Call:**
 ```
@@ -116,18 +113,21 @@ get_edge(session_id, source, target, relation)
 ```
 Use the exact `source`/`target`/`relation` triple from the edge record you
 already have — `get_edge` is the only tool that returns the full
-`occurrences` list (the compact edge records from `get_out_edges`/
-`get_in_edges`/`edges_by_relation` only give you `occurrence_count`, the
-length of that list, not its contents).
+`occurrences` list (the compact edge records from `get_edges`/
+`edges_by_relation` only give you `occurrence_count`, the length of that
+list, not its contents). Omit `relation` to get every edge between the pair,
+each with its occurrences.
 
 **Read off the result:** `occurrences` is a list of
-`{sail_field, sail_line, sail_col, raw_ref}` dicts — one per distinct source
+`{sail_field, sail_line, sail_col, raw_ref, ref_kind}` dicts (plus sub-object
+detail such as `field`/`hop_depth`/`route` on a resolved leaf — see
+`relation-vocabulary.md` §3) — one per distinct source
 location that produced this same (source, target, relation) edge (multiple
 references to the same target from the same host artifact aggregate onto
 ONE edge with multiple occurrences, not multiple edges). `raw_ref` is the
 literal reference text as written in the SAIL; `sail_field`/`sail_line`/
-`sail_col` pinpoint where in the source object it appears. A `renders_via`
-edge's occurrence(s) carry `sail_field == "detailViewCfg:{urlStub}"` rather
+`sail_col` pinpoint where in the source object it appears. A record view's
+`references` edge's occurrence(s) carry `sail_field == "detailViewCfg:{urlStub}"` rather
 than a real SAIL expression field, since the reference is synthesized from
 the record view's detail-view config, not authored SAIL.
 
@@ -144,7 +144,8 @@ graph_overview(session_id)
 
 **Read off the result:** `node_count_by_kind`/`edge_count_by_relation` give
 the shape (e.g. how many `recordField`/`recordAction` nodes vs. plain
-`artifact` nodes; how much traffic is `calls` vs. `references`).
+`artifact` nodes; how much traffic is `references` vs. each structural
+relation).
 `occurrence_count_by_provenance` (keyed `"reference"`/`"structural"`) tells
 you how much of the edge volume is real SAIL references vs. structural
 record-model scaffolding. To gauge how much of the graph is boundary noise
@@ -172,11 +173,14 @@ blank.
 ```
 list_nodes(session_id, kind=None, object_type=None, limit=200)
 ```
-No `query` — use this to enumerate, e.g., every `kind="recordType"` artifact
-or everything of a given `object_type`. Remember `object_type` is carried
+No `query` — use this to enumerate, e.g., every `object_type="recordType"`
+artifact or every `kind="sitePage"` node. Remember `object_type` is carried
 ONLY by `kind="artifact"` nodes, so filtering by `object_type` silently
 excludes every `recordView`/`recordField`/`recordAction`/`recordRelationship`/
 `appian_builtin`/boundary node too.
+
+A `kind` outside the 11 node kinds, or an `object_type` this graph has no
+node of, returns an error whose `valid` list names what you can pass.
 
 Both share the same paginated envelope
 (`{"nodes": [...], "returned", "total_matching", "truncated"}`) — check
@@ -186,10 +190,13 @@ uncapped) or add a `kind`/`object_type` filter to narrow instead.
 **Relation-first discovery:** to find every edge of a given kind graph-wide
 (not anchored to one node), use `edges_by_relation(session_id, relation)`
 instead — e.g. `edges_by_relation(session_id, "uses_connected_system")` to
-audit every connected-system dependency in the graph at once. An unmatched
-or misspelled relation name returns `[]`, not an error — double-check
-spelling against the relation vocabulary reference before concluding the
-relation doesn't occur.
+audit every connected-system dependency in the graph at once. It returns the
+same envelope, keyed `edges`; check `truncated` or pass `limit=0`. A
+misspelled relation is an `unknown relation` error naming the 10 valid ones.
+`references` is not a useful graph-wide filter: in one measured 80,910-edge
+graph it was 85% of the edges, and 25 MB at `limit=0`. For a reference
+question, find the node with `find_nodes`/`list_nodes` and read its
+`get_edges`.
 
 ## 8. Cheap centrality — "how connected is this node"
 
@@ -233,7 +240,7 @@ relationships — this path is for rules/interfaces/expression rule edits, not
 record-model structure changes.
 
 **Then re-query:** immediately re-run whatever read tool you used before
-(`get_node`, `get_out_edges`, `reachable`, ...) against the same
+(`get_node`, `get_edges`, `reachable`, ...) against the same
 `session_id` — the patch is applied in place, no new session needed. A
 `"rejected"`/`"error"` entry means that particular uuid's data in the
 session is unchanged (stale), so don't assume a refresh happened for it.
@@ -242,8 +249,8 @@ session is unchanged (stale), so don't assume a refresh happened for it.
 
 **Goal:** a record type's full shape — its fields (and their Display Names),
 views, actions, and relationships (with cardinality and target record type)
-— in one call, instead of `get_out_edges` on the record type filtered to
-four relations, then a follow-up call per field/relationship.
+— in one call, instead of `get_edges` on the record type filtered to four
+relations, then a follow-up call per field/relationship.
 
 **Call:**
 ```
@@ -257,7 +264,7 @@ kind="artifact", object_type="recordType")` or
 **Read off the result:** `{"fields": [...], "views": [...], "actions":
 [...], "relationships": [...]}` — see `references/return-shapes-and-errors.md`
 for the full shape. Every embedded `id` feeds directly into any other tool
-(e.g. `get_out_edges` on a relationship's `id` if you need more than
+(e.g. `get_edges` on a relationship's `id` if you need more than
 cardinality/target). A field only carries a `display_name` key when a
 Display Name node is actually materialized for it (ADR 0031) — most fields
 won't have one. A record type declaring none of fields/views/actions/
@@ -266,10 +273,10 @@ exists but isn't a record type (e.g. a field or relationship id by mistake)
 gets its own distinct `{"error": "not a recordType", ...}`, not the
 generic not-found dict.
 
-**When to use `get_out_edges` instead:** `record_model` gives you the
+**When to use `get_edges` instead:** `record_model` gives you the
 CURATED four-relation shape (fields/views/actions/relationships) with the
 one-hop-further Display-Name/target follow-through already done. If you need
 a relation this tool doesn't compose (e.g. `secured_by`, or a view's
-`renders_via` target — recipe §3), or the full edge metadata
+`uiExpr` reference target — recipe §3), or the full edge metadata
 (`provenance`/`occurrence_count`) rather than the compact substructure, drop
-back to `get_out_edges(session_id, record_type_id)` directly.
+back to `get_edges(session_id, record_type_id, direction="out")` directly.

@@ -1,6 +1,6 @@
 ---
 name: "iadc-graph"
-description: "MANDATORY skill for the IADC graph MCP (`iadc` server, tools surfaced as `mcp__iadc__*`, 18 tools). Provides the session lifecycle (seed -> seed_status -> read tools -> close, 30-min TTL), the node-id forms read tools require (never a display name — get a starting node_id from find_nodes/list_nodes), the 25-relation vocabulary (exact-match string, unknown relation -> [] not an error), the 11 node kinds/object_types, and the return-shape/error conventions the tool schemas can't express (compact enriched records, node_label as the wire key not `name`, occurrences only via get_edge, session-error dict shapes). Load BEFORE calling any `iadc` MCP tool. Covers: seed, seed_status, close, report_changes, get_neighbors, get_node, callers_of, shortest_path, get_out_edges, get_in_edges, get_edge, edges_by_relation, list_nodes, find_nodes, graph_overview, reachable, record_model, get_sail. Verbs: seed, traverse, find, list, path, callers, neighbors, reachable, blast radius, record model, get sail, close session."
+description: "MANDATORY skill for the IADC graph MCP (`iadc` server, tools surfaced as `mcp__iadc__*`, 15 tools). Provides the session lifecycle (seed -> seed_status -> read tools -> close, 30-min TTL), the node-id forms read tools require (never a display name — get a starting node_id from find_nodes/list_nodes), the 10-relation vocabulary (exact-match string; an unknown relation, kind, object_type or direction is an error naming the valid values), the 11 node kinds/object_types, and the return-shape/error conventions the tool schemas can't express (compact enriched records, node_label as the wire key not `name`, occurrences only via get_edge, session-error dict shapes). Load BEFORE calling any `iadc` MCP tool. Covers: seed, seed_status, close, report_changes, get_node, shortest_path, get_edges, get_edge, edges_by_relation, list_nodes, find_nodes, graph_overview, reachable, record_model, get_sail. Verbs: seed, traverse, find, list, path, callers, neighbors, reachable, blast radius, record model, get sail, close session."
 ---
 
 ## Why this matters
@@ -22,12 +22,12 @@ resolves against that session's graph only.
 
 ## How to recognize the tools
 
-Surfaced as `mcp__iadc__*`. All 18:
+Surfaced as `mcp__iadc__*`. All 15:
 
 `seed`, `seed_status`, `close`, `report_changes` (session/lifecycle) —
-`get_neighbors`, `get_node`, `callers_of`, `shortest_path`, `get_out_edges`,
-`get_in_edges`, `get_edge`, `edges_by_relation`, `list_nodes`, `find_nodes`,
-`graph_overview`, `reachable`, `record_model`, `get_sail` (read/query).
+`get_node`, `shortest_path`, `get_edges`, `get_edge`, `edges_by_relation`,
+`list_nodes`, `find_nodes`, `graph_overview`, `reachable`, `record_model`,
+`get_sail` (read/query).
 
 If you see these, this skill is MANDATORY — load it before the first call.
 
@@ -39,7 +39,7 @@ Each file covers what the tool schemas can't say. Load on demand:
 |---|---|
 | Session states, TTL, principal binding, the two `seed` front doors, cancellation | `references/session-lifecycle.md` |
 | A starting `node_id` (from a name, a UUID, or a search term) | `references/identifiers-and-discovery.md` |
-| The exact relation strings, provenance ledger, `calls` vs `calls_builtin` vs `references` | `references/relation-vocabulary.md` |
+| The exact relation strings, provenance ledger, what a `references` occurrence carries | `references/relation-vocabulary.md` |
 | What `kind` and `object_type` values mean, node-id forms per kind | `references/node-kinds.md` |
 | Multi-step traversal patterns (blast radius, callers, path, record-model walks) | `references/traversal-recipes.md` |
 | Exact JSON shapes returned, and every error dict / empty-vs-not-found distinction | `references/return-shapes-and-errors.md` |
@@ -101,8 +101,8 @@ from finding the application to seed.)
    `list_nodes(session_id, kind=..., object_type=...)`. See
    `references/identifiers-and-discovery.md` for resolving a human-given
    object name to the UUID you actually need first.
-4. **Walk the graph** with the query tools (`get_neighbors`, `callers_of`,
-   `shortest_path`, `get_out_edges`/`get_in_edges`, `get_edge`,
+4. **Walk the graph** with the query tools (`get_edges`,
+   `shortest_path`, `get_edge`,
    `edges_by_relation`, `reachable`, `graph_overview`, `get_node`,
    `record_model`, `get_sail`) using the `id` values the tools themselves
    return — never a label you typed by hand.
@@ -118,23 +118,21 @@ from finding the application to seed.)
   `display_name` in tool output — `node_label` is the wire key (ADR
   0019/0028), and it's the byte-identical string a human sees in the
   graphify visualization.
-- **Node ids are not always UUIDs.** Forms include a bare Appian UUID, a
-  synthesized `appian:{name}` (built-ins), a composite `{rt_uuid}/{stub}`
-  (record views and view-backed fields), a composite `{site_uuid}/{page_uuid}`
-  (site/portal pages), or raw ref text (some boundary nodes). Always pass an
-  `id` exactly as another tool returned it — never construct or guess one.
-- **`relation` is an exact-match string, not fuzzy.** `edges_by_relation`
-  with an unknown/misspelled relation returns `[]` — a valid empty result,
-  not an error. A typo and "this relation genuinely doesn't occur" look
-  identical; check spelling against `references/relation-vocabulary.md`.
+- **Node ids are not always UUIDs.** Always pass an `id` exactly as another
+  tool returned it — never construct or guess one.
+- **Filter values are exact-match, and a wrong one is an error.** An
+  unknown `relation`, `kind`, `object_type` or `direction` returns
+  `{"error": "unknown <param>", ..., "valid": [...]}` — read `valid` and
+  retry. An empty result means the value was valid and nothing matched.
 - **Sessions expire after a 30-minute idle TTL.** A `session_id` that
   worked earlier in a long conversation may now return
   `{"error": "unknown or expired session", ...}`. Re-`seed` if so — don't
   assume a bug.
-- **`get_out_edges`/`get_in_edges`/`edges_by_relation` never include the full
+- **`get_edges`/`edges_by_relation` never include the full
   `occurrences` list** — only `occurrence_count`. Drill into a specific edge
   with `get_edge(session_id, source, target, relation)` for the full
-  occurrences and provenance.
+  occurrences and provenance; omit `relation` to get every edge between the
+  pair.
 - **`[]` vs `{"error": ...}` are both real, distinct outcomes** — don't treat
   an empty list as failure. See `references/return-shapes-and-errors.md` for
   which tools distinguish "exists but empty" from "not found."
@@ -154,7 +152,7 @@ from finding the application to seed.)
   A `get_sail` call after reporting a change sees the freshened data, same
   as every other read tool.
 
-## Quick-reference: all 18 tools
+## Quick-reference: all 15 tools
 
 | Tool | Purpose | Key params |
 |---|---|---|
@@ -162,14 +160,11 @@ from finding the application to seed.)
 | `seed_status` | Poll a `seed(application_uuid=...)` build | `session_id` |
 | `close` | Free a session / cancel an in-flight build | `session_id` |
 | `report_changes` | Patch/delete session graph nodes after live edits | `session_id`, `uuids: list[str]` |
-| `get_neighbors` | Direct successors/predecessors of a node | `session_id`, `node_id`, `direction: "in"\|"out"` |
 | `get_node` | Full attribute dict + degree for one node | `session_id`, `node_id` |
-| `callers_of` | Nodes with a `calls`-relation edge into this node only | `session_id`, `node_id` |
 | `shortest_path` | Shortest directed path between two nodes | `session_id`, `source`, `target` |
-| `get_out_edges` | Every outgoing edge, compact form | `session_id`, `node_id`, `relation?` |
-| `get_in_edges` | Every incoming edge, compact form | `session_id`, `node_id`, `relation?` |
-| `get_edge` | Full single-edge record, incl. `occurrences` | `session_id`, `source`, `target`, `relation` |
-| `edges_by_relation` | Every edge with a given relation name | `session_id`, `relation` |
+| `get_edges` | A node's outgoing or incoming edges, compact form | `session_id`, `node_id`, `direction: "in"\|"out"`, `relation?` |
+| `get_edge` | Full edge record(s) between a pair, incl. `occurrences` | `session_id`, `source`, `target`, `relation?` |
+| `edges_by_relation` | Every edge with a given relation name | `session_id`, `relation`, `limit` |
 | `list_nodes` | Browse/filter nodes by kind/object_type | `session_id`, `kind?`, `object_type?`, `limit` |
 | `find_nodes` | Substring search over label/id/name | `session_id`, `query`, `kind?`, `object_type?`, `limit` |
 | `graph_overview` | Graph-wide counts by kind/object_type/relation/provenance | `session_id` |

@@ -7,7 +7,7 @@ guards this file **token-level only**: every wire key `node_label`,
 `unknown or expired session`, `node not found`, `session not ready` must
 appear backtick-wrapped somewhere below, forward-coupled from the code that
 produces them (named error constants; wire keys verified against real
-return values — a sibling check in the same suite also guards the 18-tool
+return values — a sibling check in the same suite also guards the 15-tool
 roster against `SKILL.md`'s own enumeration). It does **not** enforce full
 prose/shape equality — if a shape's structure changes beyond these guarded
 tokens, update this file by hand, same as before.
@@ -18,24 +18,19 @@ dict (`session does not belong to this caller`) for a mismatch. That check
 is retired — `session_id` alone is the capability, any caller may read any
 known session — so that error dict no longer exists; only the two below.
 
-**Every one of the 18 tools returns a JSON string**, not a raw object —
+**Every one of the 15 tools returns a JSON string**, not a raw object —
 `mcp.tool()` functions all end in `json.dumps(...)`. Parse the string before
 reading any field. Everything below describes the shape *after* you
 `json.loads()` it.
 
 **Errors are dicts, never raised exceptions across the MCP boundary** — with
-two exceptions, both real `ValueError`s that surface as an MCP-level tool
-error (`mcp.server.fastmcp.exceptions.ToolError`, message = the exception
-text), not the `{"error": ...}` JSON shape everything else here uses:
-
-- An invalid `direction` (`get_neighbors`/`reachable`). Check for
-  `direction in ("in", "out")` on your side before calling, or be ready to
-  catch it.
-- `seed(export_ref=...)`'s own validation (`graph_mcp/session.py::seed_export`,
-  pre-existing) — the path doesn't resolve to an existing directory, or
-  (IV-321, HTTP callers only) doesn't resolve under one of this server's
-  allowed export roots. See `references/session-lifecycle.md`'s
-  `export_ref` section for what those roots are.
+one exception: `seed(export_ref=...)`'s own validation
+(`graph_mcp/session.py::seed_export`) raises a `ValueError` that surfaces as
+an MCP-level tool error (`mcp.server.fastmcp.exceptions.ToolError`, message =
+the exception text) when the path doesn't resolve to an existing directory,
+or (HTTP callers only) doesn't resolve under one of this server's allowed
+export roots. See `references/session-lifecycle.md`'s `export_ref` section
+for what those roots are.
 
 ## The compact enriched record
 
@@ -57,12 +52,12 @@ edge record (built by `enrich_node`):
   in practice) for a node whose attribute dict is unexpectedly empty.
   `node_label` still renders in that case, falling back to the raw node id.
 - Lists of these records are sorted by `(node_label, id)` (ties broken by id)
-  — `get_neighbors`, `callers_of`, `shortest_path`, `list_nodes`, `find_nodes`,
-  `reachable`.
+  — `list_nodes`, `find_nodes`, `reachable`. `shortest_path` returns them in
+  path order.
 
 ## The compact edge record
 
-Returned by `get_out_edges`, `get_in_edges`, `edges_by_relation`:
+Returned by `get_edges` (a list) and `edges_by_relation` (inside its envelope, below):
 
 ```json
 {
@@ -80,24 +75,26 @@ actual occurrence data (source locations / call-site detail) for a specific
 edge, follow up with `get_edge(session_id, source, target, relation)` using
 the exact `source`/`target`/`relation` you just read off this record.
 
-Sort order differs by which end varies:
-- `get_out_edges`: sorted by `(target.node_label, target.id, relation)`.
-- `get_in_edges`: sorted by `(source.node_label, source.id, relation)`.
-- `edges_by_relation`: sorted by `(source.node_label, source.id,
-  target.node_label, target.id, relation)`.
+One record per edge: a pair joined by two relations (say a record type's
+`has_field` edge and a `references` edge to the same field) appears twice,
+told apart by `relation`.
 
-`get_out_edges`/`get_in_edges` take an optional `relation` parameter to
-pre-filter to one relation, same exact-match semantics as `edges_by_relation`
-below: an unknown/misspelled relation returns `[]`, not an error. Omitted
-(the default) returns every edge, unfiltered — the pre-IV-137 behavior.
-`get_out_edges(node, relation="calls")` and `get_in_edges(node,
-relation="uses_display_name")` answer "who does this call" / "who uses this
-display name" in one precise call instead of fetching every edge and
-filtering client-side.
+Sort order puts the far end first:
+- `get_edges(direction="out")`: `(target.node_label, target.id, relation)`.
+- `get_edges(direction="in")`: `(source.node_label, source.id, relation)`.
+- `edges_by_relation`: `(source.node_label, source.id, target.node_label,
+  target.id)`, before the `limit` cap.
+
+`get_edges` takes an optional `relation` to keep one relation's edges:
+`get_edges(node, direction="out", relation="references")` answers "what does
+this reference", `get_edges(field, direction="in", relation="has_field")`
+"which record type declares this field". A relation outside the vocabulary is
+an `unknown relation` error (below), not an empty list.
 
 ## The discovery / pagination envelope
 
-Shared by `list_nodes`, `find_nodes`, `reachable`:
+Shared by `list_nodes`, `find_nodes`, `reachable` (key `nodes`) and
+`edges_by_relation` (key `edges`, holding compact edge records):
 
 ```json
 {
@@ -108,13 +105,13 @@ Shared by `list_nodes`, `find_nodes`, `reachable`:
 }
 ```
 
-- `nodes` is sorted by `(node_label, id)`.
+- `nodes` is sorted by `(node_label, id)`; `edges` as listed above.
 - `total_matching` is the count **before** the `limit` cap; `returned` is the
   count after. `truncated = total_matching > returned`.
 - `limit <= 0` means no cap — you get everything, and `truncated` is always
   `false` in that case (`returned == total_matching`).
 - An empty result here is `{"nodes": [], "returned": 0, "total_matching": 0,
-  "truncated": false}` — not an error. A filter that matches nothing is a
+  "truncated": false}` — not an error. A valid filter that matches nothing is a
   valid, real answer.
 
 ## `graph_overview` — graph-wide counts
@@ -123,9 +120,9 @@ Shared by `list_nodes`, `find_nodes`, `reachable`:
 {
   "node_count_by_kind": {"artifact": 812, "external": 40, ...},
   "node_count_by_object_type": {"processModel": 120, "queryRule": 340, ...},
-  "edge_count_by_relation": {"calls": 1500, "references": 200, ...},
-  "occurrence_count_by_relation": {"calls": 2100, ...},
-  "occurrence_count_by_provenance": {"reference": 1800, "structural": 900},
+  "edge_count_by_relation": {"references": 1500, ...},
+  "occurrence_count_by_relation": {"references": 2100, ...},
+  "occurrence_count_by_provenance": {"reference": 2100, "structural": 900},
   "total_nodes": 900,
   "total_edges": 1900
 }
@@ -139,7 +136,7 @@ Shared by `list_nodes`, `find_nodes`, `reachable`:
 - `total_nodes`/`total_edges` are computed sums (`sum(node_count_by_kind.values())`
   / `sum(edge_count_by_relation.values())`), not independently tracked counters.
 
-## `record_model` — one-call record type substructure (IV-138)
+## `record_model` — one-call record type substructure
 
 Read-only composition of a record type's `has_field`/`has_display_name`/
 `has_view`/`defines_action`/`declares`/`targets` edges — the nested
@@ -168,7 +165,7 @@ substructure in one call instead of an out-edges-then-per-child dance:
 ```
 
 - Every embedded record's `id` is a real node id — feed it straight into
-  `get_node`/`get_out_edges`/etc., same as any other tool's output.
+  `get_node`/`get_edges`/etc., same as any other tool's output.
 - A field's `display_name` key is present **only** when a Display Name node
   is actually materialized for that field (ADR 0031 — reference-only
   materialization, not every field gets one); absent, never `null`, when
@@ -183,7 +180,7 @@ substructure in one call instead of an out-edges-then-per-child dance:
   "recordType"` (e.g. you passed a field/view/relationship id, or an
   unrelated artifact, by mistake).
 
-## `get_sail` — a node's SAIL, field-keyed (IV-148)
+## `get_sail` — a node's SAIL, field-keyed
 
 SAIL is already retained in the session (`SessionEntry.context.artifacts`)
 but no other tool exposes the expression body — every other tool describes
@@ -256,29 +253,35 @@ data (there is none; edges embed nothing but their own attrs).
 
 ## `get_edge` — the full record
 
-The single-edge drill-down tool. Returns the **complete edge attribute
-dict**, unfiltered — this is the only tool that gives you the full
-`occurrences` list:
+The drill-down tool, and the only one that gives you the full `occurrences`
+list. With a `relation`, it returns that edge's **complete attribute dict**:
 
 ```json
 {
+  "relation": "references",
   "provenance": "reference",
   "occurrences": [ {"...": "..."}, ... ],
   "...other stored edge attrs...": "..."
 }
 ```
 
-No `source`/`target`/`relation` echoed back in the body (you already supplied
-them as arguments) and no enriched node records embedded — if you need the
-endpoints' `node_label`/`kind`, call `get_node` on each id separately, or read
-them off the compact edge record you drilled in from.
+Without a `relation`, it returns every edge from `source` to `target`, each
+the same full dict, sorted by `relation`:
+
+```json
+{"edges": [{"relation": "has_field", ...}, {"relation": "references", ...}]}
+```
+
+Edges are directional: `get_edge(A, B)` does not return a `B → A` edge.
+No `source`/`target` are echoed back and no enriched node records are
+embedded — if you need the endpoints' `node_label`/`kind`, call `get_node` on
+each id, or read them off the compact edge record you drilled in from.
 
 ## Session-resolution errors (uniform across every read tool)
 
-Every read tool (`get_neighbors`, `get_node`, `callers_of`, `shortest_path`,
-`get_out_edges`, `get_in_edges`, `get_edge`, `edges_by_relation`, `list_nodes`,
-`find_nodes`, `graph_overview`, `reachable`, `report_changes`, `record_model`,
-`get_sail`) funnels through the same session-resolution check first and returns one of
+Every read tool (`get_node`, `shortest_path`, `get_edges`, `get_edge`,
+`edges_by_relation`, `list_nodes`, `find_nodes`, `graph_overview`,
+`reachable`, `report_changes`, `record_model`, `get_sail`) funnels through the same session-resolution check first and returns one of
 these two dicts verbatim on failure — check for `"error"` in the parsed
 JSON before assuming you got a real result shape:
 
@@ -287,10 +290,8 @@ JSON before assuming you got a real result shape:
 ```
 Unknown, already-closed, or TTL-expired `session_id`. Indistinguishable from
 a typo'd id — there's no way to tell "never existed" from "existed once."
-(Before IV-342 there was a second, distinct dict here for a `session_id`
-presented by a different principal than the one that seeded it —
-`session_id` is no longer principal-scoped, so any known session resolves
-regardless of who's asking; see `references/session-lifecycle.md`.)
+Any known session resolves regardless of who is asking; see
+`references/session-lifecycle.md`.
 
 ```json
 {"error": "session not ready", "session_id": "<id>", "state": "<current SessionState>"}
@@ -312,19 +313,13 @@ never check readiness) — see their own sections below.
 ```json
 {"closed": true}
 ```
-Session existed and was removed — regardless of who seeded it (IV-342:
-`close` is no longer principal-checked, same retirement as every read tool)
-— also cancels an in-flight `application_uuid` build if the session was
+Session existed and was removed — regardless of who seeded it — also cancels an in-flight `application_uuid` build if the session was
 still in an in-progress phase.
 
 ```json
 {"closed": false}
 ```
-Unknown, already-closed, or expired `session_id`. (Before IV-342, `close`
-also collapsed a second case in here — "belongs to a different
-principal" — since it alone kept an ownership check after the read tools'
-was dropped. That asymmetry is gone too: `close` now succeeds for any known
-`session_id`, same as a read.)
+Unknown, already-closed, or expired `session_id`.
 
 ## `seed_status` errors — only one, no readiness dict
 
@@ -344,8 +339,8 @@ success), or `"export_failed"`/`"export_timed_out"`/`"build_failed"`/
 ```json
 {"error": "node not found", "id": "<node_id>"}
 ```
-Used by `get_neighbors`, `get_node`, `callers_of`, `get_out_edges`,
-`get_in_edges`, `reachable`, `record_model`, `get_sail` for an absent `node_id` — the
+Used by `get_node`, `get_edges`, `reachable`, `record_model`, `get_sail` for an
+absent `node_id` — the
 `node not found` error. For `shortest_path`, the same shape is used for
 whichever of `source`/`target` is missing — **`source` is checked first**,
 so if both are absent you'll see
@@ -357,10 +352,11 @@ distinct wrong-kind error — see its own section above, not this one.
 ```json
 {"error": "edge not found", "source": "...", "target": "...", "relation": "..."}
 ```
-`get_edge` only, when the exact `(source, target, relation)` triple doesn't
-exist. Getting the `relation` string wrong (e.g. `"reference"` instead of
-`"calls"`) produces this, not a node-not-found — the nodes may both exist
-fine.
+`get_edge` only: no edge from `source` to `target` with that relation, or —
+with `relation` omitted, and then without the `"relation"` key — no edge
+from `source` to `target` at all. The nodes may both exist. A misspelled
+relation (`"reference"` for `"references"`) is an `unknown relation` error
+instead (below).
 
 ## No-path — distinct from not-found
 
@@ -374,28 +370,40 @@ not-found dict means the search never started because an endpoint is
 missing. `source == target` (both present) is the trivial case and returns a
 **single-element list**, not `{"path": null}`.
 
-## Empty list vs. error — tool-by-tool
+## Empty result vs. error — tool-by-tool
 
-A `[]` (or an empty `"nodes"` array in the pagination envelope) is a real,
-successful answer, not a failure — don't retry or treat it as broken:
+A `[]` (or an empty `nodes`/`edges` array in the pagination envelope) is a
+real, successful answer, not a failure — don't retry or treat it as broken:
 
 | Tool | `[]` / empty means | Error dict instead when |
 |---|---|---|
-| `get_neighbors` | node exists, no neighbors that direction | node absent |
-| `callers_of` | node exists, no `calls`-relation callers | node absent |
-| `get_out_edges` | node exists, no outgoing edges, **or an optional `relation` filter matched none (including a misspelled relation)** — never an error | node absent |
-| `get_in_edges` | node exists, no incoming edges, **or an optional `relation` filter matched none (including a misspelled relation)** — never an error | node absent |
-| `edges_by_relation` | **no edges match, including an unknown/misspelled relation string** — never an error | (never errors on relation content) |
-| `list_nodes` / `find_nodes` / `reachable` | filter matched nothing (envelope `nodes: []`) | `reachable`/others: node absent (`find_nodes` also errors on empty `query`) |
+| `get_edges` | node exists, no edges that direction, or none with the given `relation` | unknown `direction`, unknown `relation`, node absent |
+| `edges_by_relation` | a valid relation with no edges in this graph | unknown `relation` |
+| `list_nodes` / `find_nodes` | filter matched nothing | unknown `kind` / `object_type` (`find_nodes` also errors on empty `query`) |
+| `reachable` | node exists, nothing reachable that direction | unknown `direction`, node absent |
 
-`edges_by_relation` is the one to internalize: passing a relation name that
-doesn't exist in the vocabulary (`references/relation-vocabulary.md`) gives
-you `[]`, identical to a correctly-spelled relation with zero matches. There
-is no way to distinguish "typo" from "genuinely zero of these" from the
-return value alone — check your spelling against the vocabulary reference if
-an empty result surprises you. The same holds for `get_out_edges`/
-`get_in_edges`'s optional `relation` parameter (IV-137) — it reuses this
-exact-match filter, so a typo there is just as silent.
+An empty result is never a typo: a misspelled filter value is an error that
+names the valid values (next section).
+
+## Unknown-value errors
+
+Every parameter with a fixed vocabulary is checked before the query runs.
+A value outside it returns the parameter's name, the value you sent, and the
+valid values:
+
+```json
+{"error": "unknown relation", "relation": "reference", "valid": ["contains_page", "declares", "..."]}
+```
+
+| Parameter | Tools | `valid` holds |
+|---|---|---|
+| `direction` | `get_edges`, `reachable` | `["in", "out"]` |
+| `relation` | `get_edges`, `get_edge`, `edges_by_relation` | the 10 relations (`references/relation-vocabulary.md`) |
+| `kind` | `list_nodes`, `find_nodes` | the 11 node kinds (`references/node-kinds.md`) |
+| `object_type` | `list_nodes`, `find_nodes` | the object types present in **this session's** graph — the keys of `graph_overview`'s `node_count_by_object_type` |
+
+`get_edges` checks `direction`, then `relation`, then the node. `find_nodes`
+checks `query` before the filters.
 
 ## Bad-input errors
 

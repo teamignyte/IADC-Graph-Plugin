@@ -1,9 +1,9 @@
 # Session lifecycle
 
 The `iadc` graph MCP is **session-based**: it starts with no graph loaded.
-Every read tool (`get_node`, `get_neighbors`, `find_nodes`, `list_nodes`,
-`callers_of`, `shortest_path`, `get_out_edges`/`get_in_edges`/`get_edge`,
-`edges_by_relation`, `graph_overview`, `reachable`) takes a `session_id` as
+Every read tool (`get_node`, `find_nodes`, `list_nodes`, `shortest_path`,
+`get_edges`, `get_edge`, `edges_by_relation`, `graph_overview`,
+`reachable`, `record_model`, `get_sail`, `report_changes`) takes a `session_id` as
 its first argument and resolves against that session's graph. You always
 start by calling `seed(...)`, and you thread the returned `session_id`
 through every subsequent call in the conversation/task — one seed, many
