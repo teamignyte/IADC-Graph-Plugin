@@ -27,7 +27,7 @@ enriched endpoint records every edge tool returns). At a boundary node
 
 | Constant | String value | When it applies |
 |---|---|---|
-| `REFERENCES` | `references` | The source object mentions the target — in SAIL, in a static typed reference (a process-model node input, a record action's launch target, a site/portal page's `<uiObject>`), resolved or not. Resolved targets are artifact nodes, `appian_builtin` nodes, or record-model nodes (`recordField`, `recordAction`, `recordRelationship`, `recordFieldDisplayName`); unresolved ones are boundary nodes. Two references from the same source to the same target share **one** edge whose `occurrences` list holds both. |
+| `REFERENCES` | `references` | The source object mentions the target — in SAIL, in a static typed reference (an object id stored outside SAIL with its type declared beside it, such as a constant whose value names a process model), resolved or not. Resolved targets are artifact nodes, `appian_builtin` nodes, or record-model nodes (`recordField`, `recordAction`, `recordRelationship`, `recordFieldDisplayName`); unresolved ones are boundary nodes. Two references from the same source to the same target share **one** edge whose `occurrences` list holds both. |
 
 The source is the object whose definition holds the mention, with these
 re-routings (ADR 0028/0031/0033/0034, kept by ADR 0050):
